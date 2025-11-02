@@ -1,0 +1,28 @@
+name: club_plugin
+version: '1.0'
+main: me.callum.club_plugin.Club_plugin
+api-version: '1.21'
+
+commands:
+  # economy
+  bal:
+    description: return the balance of the player's wallet
+  balance:
+    description: return the balance of the player's wallet
+  send:
+    description: send tokens to another player or crypto wallet
+
+  sell:
+    description: sell an item for Blockcoins
+  buy:
+    description: buy an item with Blockcoins
+
+  # admin commands
+  setTokenAddress:
+    description: (OPERATOR ONLY) set the token address for the server currency
+
+  setWeb3:
+    description: (OPERATOR ONLY) set the RPC url for the server's Web3 connection
+
+  setFactory:
+    description: (OPERATOR ONLY) set the address of the asset factory contract
