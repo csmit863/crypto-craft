@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./MinecraftAsset.sol";
+import {MinecraftAsset} from "./MinecraftAsset.sol";
 
 contract AssetFactory {
     event AssetCreated(address assetAddress, string name, string symbol, address owner);
