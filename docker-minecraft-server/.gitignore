@@ -1,0 +1,6 @@
+data/
+build/
+bin/
+files/
+kustomize/
+notes/
