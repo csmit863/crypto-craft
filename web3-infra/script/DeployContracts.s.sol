@@ -6,17 +6,17 @@ import { BlockCoin } from "../src/BlockCoin.sol";
 import { AssetFactory } from "../src/AssetFactory.sol";
 import { MinecraftAsset } from "../src/MinecraftAsset.sol";
 
-contract DeployMC is Script {
+contract Setup is Script {
     function run() public {
         vm.startBroadcast();
 
         // create blockcoin instance and save the address
         BlockCoin blockcoin = new BlockCoin();
-        console.log("blockcoin token address:", address(blockcoin));
+        console.log(address(blockcoin));
 
         // create asset factory contract
         AssetFactory assetFactory = new AssetFactory();
-        console.log("asset factory address:", address(assetFactory));
+        console.log(address(assetFactory));
 
         vm.stopBroadcast();
 
