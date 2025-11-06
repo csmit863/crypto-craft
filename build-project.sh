@@ -23,3 +23,7 @@ echo "✅ server-plugin successfully built at target/club_plugin-1.0.jar."
 cd ..
 cp server-plugin/target/club_plugin-1.0.jar docker-minecraft-server/plugins/club_plugin-1.0.jar
 echo "✅ copied club_plugin-1.0.jar into docker-minecraft-server/plugins."
+
+cd docker-minecraft-server
+docker compose up -d --build
+echo echo "Starting Minecraft server..."
