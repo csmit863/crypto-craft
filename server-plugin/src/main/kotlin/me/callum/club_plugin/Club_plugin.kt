@@ -16,7 +16,12 @@ class Club_plugin : JavaPlugin() {
         // Plugin startup logic
         logger.info("hello");
 
-        blockcoin = Blockcoin()
+
+        // get contract addresses from deployments.json
+        // get abi from blockCoin, assetFactory, minecraftAsset.json
+
+
+        blockcoin = Blockcoin() // address
         walletManager = WalletManager(blockcoin)
 
         registerCommands();

@@ -37,6 +37,8 @@ class Blockcoin {
 
     private val decimals: Int = 18 // Change if your token has different decimal places
 
+
+
     fun setWeb3(newRpcUrl: String) {
         rpcUrl = newRpcUrl
         web3j = Web3j.build(HttpService(newRpcUrl))
