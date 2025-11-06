@@ -11,7 +11,7 @@ import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import java.util.*
 
-import me.callum.club_plugin.economy.Blockcoin
+import me.callum.club_plugin.economy.BlockcoinManager
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.Keys
 
@@ -32,14 +32,14 @@ import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
 
 
-class WalletManager(private val blockcoin: Blockcoin) : Listener  {
+class WalletManager(private val blockcoin: BlockcoinManager) : Listener  {
     private val gson = Gson()
     private val walletFile = File("plugins/ClubPlugin/wallets.json")
     private val playerWallets = mutableMapOf<UUID, String>() // Maps Minecraft UUID to Ethereum address
     private val playerPrivateKeys = mutableMapOf<UUID, String>() // Maps Minecraft UUID to Ethereum address
     private val balances = mutableMapOf<UUID, Double>() // ClubCoin balances
 
-    public var tokenizeItem: TokenizeItem = TokenizeItem(blockcoin)
+    public var tokenizeItem: ItemTokenizer = ItemTokenizer(blockcoin)
     // todo: add 'export wallet' function which gives the user their private key
     init {
         loadWallets() // Load data on startup

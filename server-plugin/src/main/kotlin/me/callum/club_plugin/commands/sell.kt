@@ -1,6 +1,6 @@
 package me.callum.club_plugin.commands
 
-import me.callum.club_plugin.economy.TokenizeItem
+import me.callum.club_plugin.economy.ItemTokenizer
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor

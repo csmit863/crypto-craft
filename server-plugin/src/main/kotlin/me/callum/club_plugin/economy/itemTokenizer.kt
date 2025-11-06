@@ -2,7 +2,6 @@ package me.callum.club_plugin.economy
 
 import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
-import me.callum.club_plugin.economy.Blockcoin
 import org.web3j.crypto.Credentials
 import org.web3j.tx.RawTransactionManager
 import org.web3j.tx.gas.DefaultGasProvider
@@ -17,7 +16,7 @@ import java.io.File
 import java.io.FileWriter
 import java.io.FileReader
 
-class TokenizeItem(private val blockcoin: Blockcoin) {
+class ItemTokenizer(private val blockcoin: BlockcoinManager) {
     private val web3 = blockcoin.web3j
     private val credentials = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
     private val txManager = RawTransactionManager(web3, credentials)

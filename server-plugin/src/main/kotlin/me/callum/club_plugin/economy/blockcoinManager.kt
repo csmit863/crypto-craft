@@ -4,13 +4,11 @@ import org.bukkit.Bukkit
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
-import org.web3j.protocol.core.methods.response.EthCall
 import org.web3j.protocol.http.HttpService
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
 import org.web3j.abi.datatypes.Function
-import org.web3j.abi.datatypes.Type
 import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.abi.datatypes.Utf8String
 import java.math.BigInteger
@@ -26,7 +24,7 @@ import org.web3j.utils.Convert
 import java.math.RoundingMode
 
 
-class Blockcoin {
+class BlockcoinManager {
 
 
     // default values

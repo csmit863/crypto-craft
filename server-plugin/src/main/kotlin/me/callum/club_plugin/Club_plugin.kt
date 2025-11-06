@@ -3,13 +3,13 @@ import me.callum.club_plugin.commands.*
 import me.callum.club_plugin.commands.admin.SetFactoryCommand
 import me.callum.club_plugin.commands.admin.SetTokenCommand
 import me.callum.club_plugin.commands.admin.SetWeb3Command
-import me.callum.club_plugin.economy.Blockcoin
+import me.callum.club_plugin.economy.BlockcoinManager
 import org.bukkit.plugin.java.JavaPlugin
 import me.callum.club_plugin.economy.WalletManager
 
 class Club_plugin : JavaPlugin() {
 
-    private lateinit var blockcoin: Blockcoin
+    private lateinit var blockcoin: BlockcoinManager
     private lateinit var walletManager: WalletManager  // Store the instance
 
     override fun onEnable() {
@@ -21,7 +21,7 @@ class Club_plugin : JavaPlugin() {
         // get abi from blockCoin, assetFactory, minecraftAsset.json
 
 
-        blockcoin = Blockcoin() // address
+        blockcoin = BlockcoinManager() // address
         walletManager = WalletManager(blockcoin)
 
         registerCommands();
