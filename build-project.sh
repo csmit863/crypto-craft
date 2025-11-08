@@ -1,3 +1,5 @@
+set -e
+
 source .env
 
 cd web3-infra
@@ -6,6 +8,13 @@ cd web3-infra
 forge script script/DeployContracts.s.sol:Setup --private-key ${PRIVATE_KEY} \
   --broadcast --rpc-url ${RPC_URL} --json \
   | jq -s '.' > deployments.json
+
+forge script script/DeployUniswapV2.s.sol:DeployUniswapV2 \
+    --rpc-url $RPC_URL \
+    --private-key $PRIVATE_KEY \
+    --broadcast --json \
+    | jq -s '.' > uniswap_deployments.json
+
 
 # copy the deployment addresses and ABI into the Kotlin project
 cd ..

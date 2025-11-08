@@ -1,4 +1,10 @@
 {
+  "lib/briefcase": {
+    "tag": {
+      "name": "v0.1.34",
+      "rev": "abfcdd92f4f675004aa6ca4155131dda1755616d"
+    }
+  },
   "lib/forge-std": {
     "tag": {
       "name": "v1.11.0",
