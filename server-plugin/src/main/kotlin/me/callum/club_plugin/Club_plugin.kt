@@ -19,40 +19,49 @@ class Club_plugin : JavaPlugin() {
     private lateinit var blockcoin: BlockcoinManager
     private lateinit var walletManager: WalletManager
 
-    override fun onEnable() {
-        // ✅ Load deployments.json from the JAR (src/main/resources or assets folder)
-        val deployment = loadDeploymentData()
-        val blockCoinAddress = deployment.logs.getOrNull(0)
-            ?: throw IllegalStateException("Missing BlockCoin address in deployments.json")
-        val assetFactoryAddress = deployment.logs.getOrNull(1)
-            ?: throw IllegalStateException("Missing AssetFactory address in deployments.json")
+    private lateinit var wethAddress: String
+    private lateinit var uniswapFactoryAddress: String
+    private lateinit var uniswapRouterAddress: String
 
-        logger.info("Loaded BlockCoin at: $blockCoinAddress")
-        logger.info("Loaded AssetFactory at: $assetFactoryAddress")
+    override fun onEnable() {
+        // ✅ Load main deployments
+        val mainDeployment = loadDeploymentData("/me/callum/club_plugin/assets/deployments.json")
+        val blockCoinAddress = mainDeployment.logs.getOrNull(0)
+            ?: throw IllegalStateException("Missing BlockCoin address")
+        val assetFactoryAddress = mainDeployment.logs.getOrNull(1)
+            ?: throw IllegalStateException("Missing AssetFactory address")
 
         blockcoin = BlockcoinManager(blockCoinAddress, assetFactoryAddress)
         walletManager = WalletManager(blockcoin)
 
-        logger.info("Server configured with Blockcoin at $blockCoinAddress and AssetFactory at $assetFactoryAddress")
+        logger.info("BlockCoin at $blockCoinAddress, AssetFactory at $assetFactoryAddress")
+
+        // ✅ Load Uniswap deployments
+        val uniDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
+        wethAddress = uniDeployment.logs.getOrNull(0)?.substringAfter(": ")
+            ?: throw IllegalStateException("Missing WETH address")
+        uniswapFactoryAddress = uniDeployment.logs.getOrNull(1)?.substringAfter(": ")
+            ?: throw IllegalStateException("Missing Factory address")
+        uniswapRouterAddress = uniDeployment.logs.getOrNull(2)?.substringAfter(": ")
+            ?: throw IllegalStateException("Missing Router address")
+
+        logger.info("Uniswap WETH at $wethAddress, Factory at $uniswapFactoryAddress, Router at $uniswapRouterAddress")
 
         registerCommands()
         registerEvents()
     }
 
-    private fun loadDeploymentData(): DeploymentLog {
-        val resourcePath = "/me/callum/club_plugin/assets/deployments.json"
+    private fun loadDeploymentData(resourcePath: String): DeploymentLog {
         val stream = this::class.java.getResourceAsStream(resourcePath)
-            ?: throw IllegalStateException("deployments.json not found in plugin resources")
+            ?: throw IllegalStateException("$resourcePath not found")
 
         val json = stream.bufferedReader().use { it.readText() }
 
-        // Parse JSON as a list
         val listType = com.google.gson.reflect.TypeToken.getParameterized(List::class.java, DeploymentLog::class.java).type
         val deployments: List<DeploymentLog> = Gson().fromJson(json, listType)
 
-        // Use the first deployment in the list (or handle multiple if needed)
         return deployments.firstOrNull()
-            ?: throw IllegalStateException("No deployments found in deployments.json")
+            ?: throw IllegalStateException("No deployments found in $resourcePath")
     }
 
 

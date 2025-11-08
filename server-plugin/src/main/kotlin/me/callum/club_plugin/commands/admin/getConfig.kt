@@ -14,11 +14,6 @@ class GetConfigCommand(private val blockcoin: BlockcoinManager) : CommandExecuto
             return true
         }
 
-        if (args.isEmpty()) {
-            sender.sendMessage("Usage: /getConfig")
-            return true
-        }
-
         var factory = blockcoin.factoryAddress
         var blockcoin = blockcoin.blockcoinAddress
         Bukkit.getLogger().info("Factory address $factory")

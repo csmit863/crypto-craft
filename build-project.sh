@@ -9,7 +9,7 @@ forge script script/DeployContracts.s.sol:Setup --private-key ${PRIVATE_KEY} \
   --broadcast --rpc-url ${RPC_URL} --json \
   | jq -s '.' > deployments.json
 
-forge script script/DeployUniswapV2.s.sol:DeployUniswapV2 \
+forge script script/DeployUniswapV2.s.sol:DeployUniswapV2Testnet \
     --rpc-url $RPC_URL \
     --private-key $PRIVATE_KEY \
     --broadcast --json \
@@ -22,6 +22,10 @@ cp web3-infra/deployments.json server-plugin/src/main/resources/me/callum/club_p
 cp web3-infra/out/BlockCoin.sol/BlockCoin.json server-plugin/src/main/resources/me/callum/club_plugin/assets/blockCoin.json
 cp web3-infra/out/AssetFactory.sol/AssetFactory.json server-plugin/src/main/resources/me/callum/club_plugin/assets/assetFactory.json
 cp web3-infra/out/MinecraftAsset.sol/MinecraftAsset.json server-plugin/src/main/resources/me/callum/club_plugin/assets/minecraftAsset.json
+
+# copy uniswap deployments into Kotlin proj
+cp web3-infra/uniswap_deployments.json server-plugin/src/main/resources/me/callum/club_plugin/assets/uniswap_deployments.json
+
 
 echo "✅ Contracts deployed and ABI + deployment info copied successfully."
 echo "Building server-plugin.jar..."
