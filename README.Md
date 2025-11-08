@@ -31,10 +31,16 @@ chmod +x build-project.sh
 ```
 # How does it work?
 
+## Smart Contracts
+This project uses a model similar to how real-world-assets are minted and burned on the blockchain depending on real supply and exchange. 
+Every item in the game can be turned into a token - this is done through a Factory architecture. A MinecraftAsset contract is defined which
+has special functions for tokenizing and burning items, but otherwise just uses the ERC20 standard. The AssetFactory contract uses the MinecraftAsset
+contract to deploy new minecraft items as tokens if they have not already been created yet. 
+This project also makes use of Uniswap's briefcase project to quickly deploy the V2 Factory and V2 Router, however DEX functionality has not been implemented
+yet.
 
 
-
-
+## Deployment
 First, the Solidity smart contracts are built and deployed to the network of choosing (based on .env). 
 ![contractdeployed](contracts_deployed.png)
 
