@@ -4,14 +4,15 @@ cd web3-infra
 
 # deploy blockcoin and asset factory
 forge script script/DeployContracts.s.sol:Setup --private-key ${PRIVATE_KEY} \
-    --broadcast --rpc-url ${RPC_URL} --json > deployments.json 
+  --broadcast --rpc-url ${RPC_URL} --json \
+  | jq -s '.' > deployments.json
 
 # copy the deployment addresses and ABI into the Kotlin project
 cd ..
-cp web3-infra/deployments.json server-plugin/src/main/kotlin/me/callum/club_plugin/assets/deployments.json
-cp web3-infra/out/BlockCoin.sol/BlockCoin.json server-plugin/src/main/kotlin/me/callum/club_plugin/assets/blockCoin.json
-cp web3-infra/out/AssetFactory.sol/AssetFactory.json server-plugin/src/main/kotlin/me/callum/club_plugin/assets/assetFactory.json
-cp web3-infra/out/MinecraftAsset.sol/MinecraftAsset.json server-plugin/src/main/kotlin/me/callum/club_plugin/assets/minecraftAsset.json
+cp web3-infra/deployments.json server-plugin/src/main/resources/me/callum/club_plugin/assets/deployments.json
+cp web3-infra/out/BlockCoin.sol/BlockCoin.json server-plugin/src/main/resources/me/callum/club_plugin/assets/blockCoin.json
+cp web3-infra/out/AssetFactory.sol/AssetFactory.json server-plugin/src/main/resources/me/callum/club_plugin/assets/assetFactory.json
+cp web3-infra/out/MinecraftAsset.sol/MinecraftAsset.json server-plugin/src/main/resources/me/callum/club_plugin/assets/minecraftAsset.json
 
 echo "✅ Contracts deployed and ABI + deployment info copied successfully."
 echo "Building server-plugin.jar..."

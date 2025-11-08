@@ -26,3 +26,6 @@ commands:
 
   setFactory:
     description: (OPERATOR ONLY) set the address of the asset factory contract
+
+  getConfig:
+    description: (OPERATOR ONLY) get the smart contract configuration info

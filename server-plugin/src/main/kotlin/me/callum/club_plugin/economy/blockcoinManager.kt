@@ -26,10 +26,14 @@ import java.math.RoundingMode
 
 class BlockcoinManager {
 
-
+    public var blockcoinAddress: String = "" // blockcoin token
+    public var factoryAddress: String = ""
     // default values
-    public var contractAddress: String = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
-    public var factoryAddress: String = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+    constructor(blockCoinAddress: String, assetFactoryAddress: String){
+        blockcoinAddress = blockCoinAddress
+        factoryAddress = assetFactoryAddress
+    }
+
     public var rpcUrl: String = "https://testnet.qutblockchain.club"
     public var web3j: Web3j = Web3j.build(HttpService(rpcUrl))
 
@@ -70,7 +74,7 @@ class BlockcoinManager {
 
             val encodedFunction = FunctionEncoder.encode(function)
             val ethCall = web3j.ethCall(
-                Transaction.createEthCallTransaction(walletAddress, contractAddress, encodedFunction),
+                Transaction.createEthCallTransaction(walletAddress, blockcoinAddress, encodedFunction),
                 DefaultBlockParameterName.LATEST
             ).sendAsync()
 
@@ -127,7 +131,7 @@ class BlockcoinManager {
 
                 // Create a raw transaction
                 val rawtx = RawTransaction.createTransaction(
-                    nonce, gasPrice, gasLimit, contractAddress, BigInteger.ZERO, encodedFunction
+                    nonce, gasPrice, gasLimit, blockcoinAddress, BigInteger.ZERO, encodedFunction
                 )
 
                 // Sign and send transaction
@@ -190,7 +194,7 @@ class BlockcoinManager {
 
             val encodedFunction = FunctionEncoder.encode(function)
             val ethCall = web3j.ethCall(
-                Transaction.createEthCallTransaction(contractAddress, contractAddress, encodedFunction),
+                Transaction.createEthCallTransaction(blockcoinAddress, blockcoinAddress, encodedFunction),
                 DefaultBlockParameterName.LATEST
             ).sendAsync()
 
