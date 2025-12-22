@@ -1,6 +1,6 @@
-name: club_plugin
+name: crypto-craft
 version: '1.0'
-main: me.callum.club_plugin.Club_plugin
+main: me.callum.club_plugin.CryptoCraft
 api-version: '1.21'
 
 commands:

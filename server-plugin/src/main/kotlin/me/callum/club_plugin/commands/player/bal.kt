@@ -1,4 +1,4 @@
-package me.callum.club_plugin.commands
+package me.callum.club_plugin.commands.player
 
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component

@@ -2,24 +2,30 @@ package me.callum.club_plugin.economy
 
 import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
-import org.web3j.crypto.Credentials
-import org.web3j.tx.RawTransactionManager
-import org.web3j.tx.gas.DefaultGasProvider
-import org.web3j.abi.datatypes.Function
-import org.web3j.abi.datatypes.Utf8String
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
-import java.math.BigInteger
+import org.web3j.abi.datatypes.Function
+import org.web3j.abi.datatypes.Utf8String
+import org.web3j.crypto.Credentials
+import org.web3j.protocol.Web3j
+import org.web3j.tx.RawTransactionManager
+import org.web3j.tx.gas.DefaultGasProvider
 import java.io.File
-import java.io.FileWriter
 import java.io.FileReader
+import java.io.FileWriter
+import java.math.BigInteger
 
-class ItemTokenizer(private val blockcoin: BlockcoinManager) {
-    private val web3 = blockcoin.web3j
-    private val credentials = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-    private val txManager = RawTransactionManager(web3, credentials)
+
+// a class to interact with the AssetFactory contract
+
+// should implement:
+// - ability to mint new assets
+// - record new assets as they are created, check if they already exist
+// - 2 functions to return the token address of an item and vice versa
+
+class AssetFactory(private val factoryAddress: String, private val web3: Web3j, private val txManager: RawTransactionManager ) {
     private val gasProvider = DefaultGasProvider()
     private val gson = Gson()
     private val assetFile = File("plugins/ClubPlugin/assets.json")
@@ -97,8 +103,8 @@ class ItemTokenizer(private val blockcoin: BlockcoinManager) {
         val encodedFunction = FunctionEncoder.encode(getAllAssetsFunction)
         val response = web3.ethCall(
             org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
-                credentials.address,
-                blockcoin.factoryAddress,
+                txManager.fromAddress,
+                factoryAddress,
                 encodedFunction
             ),
             org.web3j.protocol.core.DefaultBlockParameterName.LATEST
@@ -120,7 +126,7 @@ class ItemTokenizer(private val blockcoin: BlockcoinManager) {
 
                 val nameCall = web3.ethCall(
                     org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
-                        credentials.address,
+                        txManager.fromAddress,
                         assetAddress.value,
                         FunctionEncoder.encode(nameFunc)
                     ),
@@ -129,7 +135,7 @@ class ItemTokenizer(private val blockcoin: BlockcoinManager) {
 
                 val symbolCall = web3.ethCall(
                     org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
-                        credentials.address,
+                        txManager.fromAddress,
                         assetAddress.value,
                         FunctionEncoder.encode(symbolFunc)
                     ),
@@ -168,7 +174,7 @@ class ItemTokenizer(private val blockcoin: BlockcoinManager) {
         val txHash = txManager.sendTransaction(
             gasProvider.gasPrice,
             gasProvider.getGasLimit("createAsset"),
-            blockcoin.factoryAddress,
+            factoryAddress,
             encodedFunction,
             BigInteger.ZERO
         ).transactionHash

@@ -1,12 +1,8 @@
-package me.callum.club_plugin.commands.amm
+package me.callum.club_plugin.commands.player
 
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.TextColor
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
-import org.bukkit.entity.Player
-import org.bukkit.util.Vector
 
 
 // contains two functions: add and remove.

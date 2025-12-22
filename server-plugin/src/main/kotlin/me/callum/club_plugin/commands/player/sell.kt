@@ -1,10 +1,9 @@
-package me.callum.club_plugin.commands
+package me.callum.club_plugin.commands.player
 
-import me.callum.club_plugin.economy.ItemTokenizer
+import me.callum.club_plugin.economy.AssetFactory
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
-import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -13,8 +12,6 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.web3j.crypto.Keys
-import org.web3j.utils.Numeric
-import java.math.BigInteger
 
 
 /**
@@ -25,7 +22,7 @@ import java.math.BigInteger
  * If these contracts do not exist, they must be created.
  */
 
-class SellItemsCommand(private val walletManager: WalletManager) : CommandExecutor, TabCompleter {
+class SellItemsCommand(private val walletManager: WalletManager, private val assetFactory: AssetFactory) : CommandExecutor, TabCompleter {
 
     override fun onTabComplete(
         sender: CommandSender,
@@ -51,8 +48,8 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
         }
 
         // Check if the command has the correct number of arguments
-        if (args.size != 3) {
-            sender.sendMessage(Component.text("Usage: /sell <item> <amount> <price>").color(TextColor.color(255, 0, 0)))
+        if (args.size != 2) {
+            sender.sendMessage(Component.text("Usage: /sell <item> <amount>").color(TextColor.color(255, 0, 0)))
             return true
         }
 
@@ -101,12 +98,12 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
 
         // this function should be used in the event that:
         // there is no minecraft asset created by the factory that matches the required item (e.g. diamond, DIAM)
-        val alreadyExists = walletManager.tokenizeItem.checkAssetExists(name, symbol)
+        val alreadyExists = assetFactory.checkAssetExists(name, symbol)
 
         if (!alreadyExists) {
-            val createAsset = walletManager.tokenizeItem.createAsset(name, symbol)
+            assetFactory.createAsset(name, symbol)
 
-            val newAddress = walletManager.tokenizeItem.getAssetAddress(name, symbol)
+            val newAddress = assetFactory.getAssetAddress(name, symbol)
             if (newAddress == null) {
                 sender.sendMessage(Component.text("❌ Failed to create token for $rawMaterialName. Try again").color(TextColor.color(255, 0, 0)))
                 return true
@@ -115,11 +112,11 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
             val checksummed = Keys.toChecksumAddress(newAddress.toString())
 
 
-            walletManager.tokenizeItem.saveAsset(name, symbol, checksummed)
+            assetFactory.saveAsset(name, symbol, checksummed)
             sender.sendMessage(Component.text("✅ Created new token for $rawMaterialName").color(TextColor.color(0, 255, 0)))
         } else {
-            sender.sendMessage(Component.text("ℹ️ Token already exists for $rawMaterialName").color(TextColor.color(200, 200, 0)))
-            val assetAddress = walletManager.tokenizeItem.getAssetAddress(name, symbol)
+            sender.sendMessage(Component.text("ℹ️ Token exists for $rawMaterialName").color(TextColor.color(200, 200, 0)))
+            val assetAddress = assetFactory.getAssetAddress(name, symbol)
             val checksummed = Keys.toChecksumAddress(assetAddress.toString())
 
             println(checksummed)
@@ -141,7 +138,7 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
             sender.sendMessage(Component.text("❌ You don't have a wallet yet. Please create one first.").color(TextColor.color(255, 0, 0)))
             return true
         }
-        val assetAddress = walletManager.tokenizeItem.getAssetAddress(name, symbol)
+        val assetAddress = assetFactory.getAssetAddress(name, symbol)
         val checksummed = Keys.toChecksumAddress(assetAddress.toString())
 
         if (checksummed == null) {
@@ -152,7 +149,7 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
         val price = 1 // expected swap price needs to be fetched from the AMM.
 
         sender.sendMessage("Minting asset at contract address $checksummed")
-        val txHash = walletManager.tokenizeItem.mintAsset(checksummed, amountToRemove, walletAddress)
+        val txHash = assetFactory.mintAsset(checksummed, amountToRemove, walletAddress)
         if (txHash == null) {
             sender.sendMessage(Component.text("❌ Failed to mint tokenized asset to your wallet").color(TextColor.color(255, 0, 0)))
         } else {

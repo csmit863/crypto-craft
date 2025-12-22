@@ -1,64 +1,36 @@
 package me.callum.club_plugin.economy
 
 import org.bukkit.Bukkit
-import org.web3j.protocol.Web3j
-import org.web3j.protocol.core.DefaultBlockParameterName
-import org.web3j.protocol.core.methods.request.Transaction
-import org.web3j.protocol.http.HttpService
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
 import org.web3j.abi.datatypes.Function
-import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.abi.datatypes.Utf8String
-import java.math.BigInteger
-
-import java.math.BigDecimal
-import java.util.concurrent.CompletableFuture
-
+import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.RawTransaction
 import org.web3j.crypto.TransactionEncoder
+import org.web3j.protocol.Web3j
+import org.web3j.protocol.core.DefaultBlockParameterName
+import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
+import org.web3j.tx.RawTransactionManager
 import org.web3j.utils.Convert
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.RoundingMode
+import java.util.concurrent.CompletableFuture
 
-
-class BlockcoinManager {
-
-    public var blockcoinAddress: String = "" // blockcoin token
-    public var factoryAddress: String = ""
-    // default values
-    constructor(blockCoinAddress: String, assetFactoryAddress: String){
-        blockcoinAddress = blockCoinAddress
-        factoryAddress = assetFactoryAddress
-    }
-
-    public var rpcUrl: String = "https://testnet.qutblockchain.club"
-    public var web3j: Web3j = Web3j.build(HttpService(rpcUrl))
+// a class to interact with the blockcoin smart contract
+// should implement:
+// - an initialisation (with blockcoin address)
+// - get balance function (for some wallet address input)
+// - get balances function (to view all existing players balances)
+// - send function (the actual web3 interfacing functionality, not the command)
+class Blockcoin(private val blockcoinAddress: String, private val web3: Web3j) {
 
     private val decimals: Int = 18 // Change if your token has different decimal places
-
-
-
-    fun setWeb3(newRpcUrl: String) {
-        rpcUrl = newRpcUrl
-        web3j = Web3j.build(HttpService(newRpcUrl))
-    }
-
-    /*
-    fun setContractAddress(newContractAddress: String) {
-        contractAddress = newContractAddress
-        Bukkit.getLogger().info("Token contract address updated to: $newContractAddress")
-    }
-
-    fun setFactoryAddress(newFactoryAddress: String) {
-        factoryAddress = newFactoryAddress
-        Bukkit.getLogger().info("Factory address updated to: $newFactoryAddress")
-    }
-
-     */
-
+    public val address = blockcoinAddress;
     /**
      * Retrieves the ERC-20 token balance for a given Ethereum address.
      * @param walletAddress The address to check the balance of.
@@ -73,7 +45,7 @@ class BlockcoinManager {
             )
 
             val encodedFunction = FunctionEncoder.encode(function)
-            val ethCall = web3j.ethCall(
+            val ethCall = web3.ethCall(
                 Transaction.createEthCallTransaction(walletAddress, blockcoinAddress, encodedFunction),
                 DefaultBlockParameterName.LATEST
             ).sendAsync()
@@ -101,7 +73,7 @@ class BlockcoinManager {
         Bukkit.getLogger().info("Amount: $amount")
         return CompletableFuture.supplyAsync {
             try {
-                val ethBalance = web3j.ethGetBalance(fromAddress, org.web3j.protocol.core.DefaultBlockParameterName.LATEST).send().balance
+                val ethBalance = web3.ethGetBalance(fromAddress, org.web3j.protocol.core.DefaultBlockParameterName.LATEST).send().balance
                 Bukkit.getLogger().info("ETH Balance: $ethBalance")
 
                 // Convert amount to smallest unit (wei)
@@ -124,8 +96,8 @@ class BlockcoinManager {
                 Bukkit.getLogger().info("DEBUG: Private key loaded successfully.")
 
                 // Fetch nonce, gas price, gas limit
-                val nonce = web3j.ethGetTransactionCount(fromAddress, org.web3j.protocol.core.DefaultBlockParameterName.LATEST).send().transactionCount
-                val gasPrice = web3j.ethGasPrice().send().gasPrice
+                val nonce = web3.ethGetTransactionCount(fromAddress, org.web3j.protocol.core.DefaultBlockParameterName.LATEST).send().transactionCount
+                val gasPrice = web3.ethGasPrice().send().gasPrice
                 val gasLimit = BigInteger.valueOf(60000) // Adjust gas as needed
                 Bukkit.getLogger().info("Nonce, Gas Price, Gas Limit initialized.")
 
@@ -138,7 +110,7 @@ class BlockcoinManager {
                 val signedTransaction = TransactionEncoder.signMessage(rawtx, credentials)
                 Bukkit.getLogger().info("Transaction signed.")
 
-                val response = web3j.ethSendRawTransaction("0x" + signedTransaction.toHexString()).send()
+                val response = web3.ethSendRawTransaction("0x" + signedTransaction.toHexString()).send()
                 if (response.hasError()) {
                     throw Exception("Transaction failed: ${response.error.message}")
                 }
@@ -154,7 +126,7 @@ class BlockcoinManager {
 
                 while (receipt == null && attempts < maxAttempts) {
                     Thread.sleep(delayMillis)
-                    receipt = web3j.ethGetTransactionReceipt(txHash).send().transactionReceipt.orElse(null)
+                    receipt = web3.ethGetTransactionReceipt(txHash).send().transactionReceipt.orElse(null)
                     attempts++
                 }
 
@@ -193,7 +165,7 @@ class BlockcoinManager {
             )
 
             val encodedFunction = FunctionEncoder.encode(function)
-            val ethCall = web3j.ethCall(
+            val ethCall = web3.ethCall(
                 Transaction.createEthCallTransaction(blockcoinAddress, blockcoinAddress, encodedFunction),
                 DefaultBlockParameterName.LATEST
             ).sendAsync()
@@ -212,4 +184,6 @@ class BlockcoinManager {
             CompletableFuture.completedFuture(false) // Return false on error
         }
     }
+
+
 }

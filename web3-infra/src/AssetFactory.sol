@@ -2,11 +2,13 @@
 pragma solidity ^0.8.20;
 
 import {MinecraftAsset} from "./MinecraftAsset.sol";
+import { Ownable } from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
-contract AssetFactory {
+contract AssetFactory is Ownable {
     event AssetCreated(address assetAddress, string name, string symbol, address owner);
 
     address[] public allAssets;
+    constructor() Ownable(msg.sender) {}
 
     function createAsset(string memory name, string memory symbol) external returns (address) {
         MinecraftAsset newAsset = new MinecraftAsset(name, symbol, msg.sender);
