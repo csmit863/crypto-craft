@@ -171,6 +171,9 @@ class SellItemsCommand(private val walletManager: WalletManager, private val ass
             }
         }
 
+        val coins = price*amount + 0.0 //
+        walletManager.fundWalletCoin(senderUUID, coins)
+
 
 
 

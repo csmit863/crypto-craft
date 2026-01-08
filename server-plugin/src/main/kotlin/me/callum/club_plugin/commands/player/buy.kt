@@ -9,6 +9,9 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.web3j.abi.datatypes.Address
+import java.math.BigDecimal
+import java.util.concurrent.CompletableFuture
 
 /**
  * To sell items, some contracts have to exist:
@@ -45,13 +48,37 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
             sender.sendMessage(Component.text("Invalid amount: must be a positive number.").color(TextColor.color(255, 0, 0)))
             return true
         }
-
-        val itemToAdd = ItemStack(material, amount)
-        sender.inventory.addItem(itemToAdd)
-
-        sender.sendMessage(Component.text("You received $amount ${material.name.lowercase().replace("_", " ")}.")
-            .color(TextColor.color(0, 255, 0)))
-
+        val price: Int = 1
+        val coinPrice: BigDecimal = BigDecimal(price*amount)
+        val balanceFuture: CompletableFuture<BigDecimal> = walletManager.getBalance(sender.uniqueId)
+        // ether balance errors. if the account does not have ether, the transaction will fail: "Transaction failed: Insufficient funds for gas * price + value".
+        // However, the item will still be provided.
+        balanceFuture.thenAccept { balance ->
+            if (balance < coinPrice) {
+                sender.sendMessage(Component.text("You don't have enough coins."))
+            } else {
+                walletManager.sendTokens(
+                    sender.uniqueId,
+                    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                    coinPrice.toDouble()
+                ).thenAccept { success ->
+                    if (success) {
+                        val itemToAdd = ItemStack(material, amount)
+                        sender.inventory.addItem(itemToAdd)
+                        sender.sendMessage(Component.text("Purchased $amount ${material.name.lowercase().replace("_", " ")} with $coinPrice blockcoins.")
+                            .color(TextColor.color(0, 255, 0)))
+                    } else {
+                        sender.sendMessage(Component.text("Failed to send tokens. Please try again.")
+                            .color(TextColor.color(255, 0, 0)))
+                    }
+                }.exceptionally { throwable ->
+                    sender.sendMessage(Component.text("An error occurred: ${throwable.message}")
+                        .color(TextColor.color(255, 0, 0)))
+                    null // Return null to satisfy the CompletableFuture
+                }
+            }
+        }
         return true
+
     }
 }

@@ -9,6 +9,7 @@ import me.callum.club_plugin.commands.player.Bal
 import me.callum.club_plugin.commands.player.BuyItemsCommand
 import me.callum.club_plugin.commands.player.SellItemsCommand
 import me.callum.club_plugin.commands.player.SendTokensCommand
+import me.callum.club_plugin.commands.player.CheckPriceCommand
 import me.callum.club_plugin.economy.AssetFactory
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
@@ -88,6 +89,7 @@ class CryptoCraft : JavaPlugin() {
 
     private fun registerCommands() {
         // economy commands
+        getCommand("price")?.setExecutor(CheckPriceCommand())
         getCommand("balance")?.setExecutor(Bal(walletManager))
         getCommand("bal")?.setExecutor(Bal(walletManager))
         getCommand("send")?.setExecutor(SendTokensCommand(walletManager))

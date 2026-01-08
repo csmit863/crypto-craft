@@ -3,22 +3,18 @@ package me.callum.club_plugin.economy
 import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
 import org.bukkit.Bukkit
-import org.bukkit.plugin.java.JavaPlugin
-import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.PlayerDeathEvent
 import org.bukkit.event.player.PlayerJoinEvent
 import java.util.*
 
-import me.callum.club_plugin.economy.Blockcoin
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.Keys
 
 import org.web3j.protocol.Web3j
 import org.web3j.crypto.Keys.createEcKeyPair
 import org.web3j.crypto.Wallet.createStandard
-import org.web3j.crypto.Keys.getAddress
 import org.web3j.crypto.RawTransaction
 import org.web3j.crypto.TransactionEncoder
 import org.web3j.protocol.http.HttpService
@@ -85,14 +81,14 @@ class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, p
             val player = Bukkit.getPlayer(playerUUID)
 
             player?.sendMessage("§aWallet created! Your address: $ethAddress")
-            fundWallet(ethAddress)
+            fundWalletEth(ethAddress)
             Bukkit.getLogger().info("Wallet created for player ${player?.name} with address: $ethAddress")
         }
         saveWallets()
     }
 
     @OptIn(ExperimentalStdlibApi::class)
-    fun fundWallet(toAddress: String) {
+    fun fundWalletEth(toAddress: String) {
         // pre generated anvil wallet private keys. dont get too excited.
         val senderPrivateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" // Replace with actual private key
         val senderAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Replace with actual sender address
@@ -144,14 +140,21 @@ class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, p
         }
     }
 
+    @OptIn(ExperimentalStdlibApi::class)
+    fun fundWalletCoin(playerUUID: UUID, amount: Double){
+        val playerWallet = playerWallets[playerUUID]
+        val privateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+        blockcoin.sendTokens("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", playerWallet, amount, privateKey)
+    }
+
     fun getWallet(playerUUID: UUID): String? {
         return playerWallets[playerUUID] // Returns Ethereum address
     }
 
     fun getBalance(playerUUID: UUID): CompletableFuture<BigDecimal> {
         val walletAddress = getWallet(playerUUID) ?: return CompletableFuture.failedFuture(Exception("No wallet found"))
-
-        return blockcoin.getBalance(walletAddress)
+        val balance = blockcoin.getBalance(walletAddress)
+        return balance
     }
 
     fun sendTokens(fromPlayer: UUID, toPlayerOrAddress: String, amount: Double): CompletableFuture<Boolean> {

@@ -16,6 +16,8 @@ commands:
     description: sell an item for Blockcoins
   buy:
     description: buy an item with Blockcoins
+  price:
+    description: check the price of an item
 
   # admin commands
   setTokenAddress:

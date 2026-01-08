@@ -4,6 +4,10 @@ source .env
 
 cd web3-infra
 
+# dependencies: jq, foundry, maven, .env
+
+forge install
+
 # deploy blockcoin and asset factory
 forge script script/DeployContracts.s.sol:Setup --private-key ${PRIVATE_KEY} \
   --broadcast --rpc-url ${RPC_URL} --json \
@@ -39,5 +43,5 @@ cp server-plugin/target/club_plugin-1.0.jar docker-minecraft-server/plugins/club
 echo "✅ copied club_plugin-1.0.jar into docker-minecraft-server/plugins."
 
 cd docker-minecraft-server
-docker compose up --build
+sudo docker compose up --build
 echo echo "Starting Minecraft server..."

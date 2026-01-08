@@ -14,7 +14,6 @@ import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
-import org.web3j.tx.RawTransactionManager
 import org.web3j.utils.Convert
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -69,7 +68,7 @@ class Blockcoin(private val blockcoinAddress: String, private val web3: Web3j) {
 
 
     @OptIn(ExperimentalStdlibApi::class)
-    public fun sendTokens(fromAddress: String, toAddress: String, amount: Double, privateKey: String): CompletableFuture<Boolean> {
+    public fun sendTokens(fromAddress: String, toAddress: String?, amount: Double, privateKey: String): CompletableFuture<Boolean> {
         Bukkit.getLogger().info("Amount: $amount")
         return CompletableFuture.supplyAsync {
             try {
