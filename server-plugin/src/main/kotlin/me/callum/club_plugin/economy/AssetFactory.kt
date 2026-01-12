@@ -134,6 +134,7 @@ object AssetFactory {
     fun checkAssetExists(name: String): Boolean {
         val assetAddresses = getAllAssets()
         Bukkit.getLogger().info(assetAddresses.toString())
+        Bukkit.getLogger().info("Just logged the asset addresses")
 
         for (assetAddress in assetAddresses) {
             try {
@@ -143,7 +144,7 @@ object AssetFactory {
                 val nameCall = web3.ethCall(
                     org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
                         txManager.fromAddress,
-                        assetAddress.value,
+                        assetAddress.toString(),
                         FunctionEncoder.encode(nameFunc)
                     ),
                     org.web3j.protocol.core.DefaultBlockParameterName.LATEST
@@ -152,7 +153,7 @@ object AssetFactory {
                 val symbolCall = web3.ethCall(
                     org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
                         txManager.fromAddress,
-                        assetAddress.value,
+                        assetAddress.toString(),
                         FunctionEncoder.encode(symbolFunc)
                     ),
                     org.web3j.protocol.core.DefaultBlockParameterName.LATEST
@@ -164,7 +165,7 @@ object AssetFactory {
                 val existingSymbol = FunctionReturnDecoder.decode(symbolCall.value, symbolFunc.outputParameters)
                     .firstOrNull()?.value as? String ?: continue
 
-                if (existingName == name) {
+                if (existingName.lowercase() == name.lowercase()) {
                     println("✅ Found asset: $existingName ($existingSymbol) at ${assetAddress.value}")
                     saveAsset(existingName, existingSymbol, assetAddress.value)
                     return true

@@ -4,6 +4,7 @@ import me.callum.club_plugin.economy.AssetFactory
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -42,6 +43,7 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
         val amount = args[1].toIntOrNull()
 
         val material = Material.matchMaterial(itemName)
+        Bukkit.getLogger().info(material.toString())
 
         if (material == null) {
             sender.sendMessage(Component.text("Unknown item type: $itemName").color(TextColor.color(255, 0, 0)))
