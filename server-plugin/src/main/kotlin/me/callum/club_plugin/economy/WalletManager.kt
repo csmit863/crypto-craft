@@ -29,7 +29,11 @@ import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
 
 
-class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, private val txManager: RawTransactionManager) : Listener  {
+object WalletManager: Listener {
+    public lateinit var blockcoin: Blockcoin
+    public lateinit var web3: Web3j
+    public lateinit var txManager: RawTransactionManager
+
     private val gson = Gson()
     private val walletFile = File("plugins/ClubPlugin/wallets.json")
     private val playerWallets = mutableMapOf<UUID, String>() // Maps Minecraft UUID to Ethereum address
@@ -37,8 +41,12 @@ class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, p
     private val balances = mutableMapOf<UUID, Double>() // ClubCoin balances
 
     // todo: add 'export wallet' function which gives the user their private key
-    init {
+    fun initialize(blockcoinInstance: Blockcoin, web3j: Web3j, txManager: RawTransactionManager): WalletManager {
+        this.blockcoin = blockcoinInstance;
+        this.web3 = web3j;
+        this.txManager = txManager;
         loadWallets() // Load data on startup
+        return this
     }
     private fun saveWallets() {
         try {
@@ -88,57 +96,53 @@ class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, p
     }
 
     @OptIn(ExperimentalStdlibApi::class)
-    fun fundWalletEth(toAddress: String) {
-        // pre generated anvil wallet private keys. dont get too excited.
+    fun fundWalletEth(toAddress: String): CompletableFuture<Boolean> {
         val senderPrivateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" // Replace with actual private key
         val senderAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Replace with actual sender address
 
         val web3 = Web3j.build(HttpService("https://testnet.qutblockchain.club")) // Change for correct RPC
 
-        CompletableFuture.runAsync {
+        return CompletableFuture.supplyAsync {
             try {
                 val credentials = Credentials.create(senderPrivateKey)
 
                 // Get transaction nonce
-                val nonce = web3.ethGetTransactionCount(senderAddress, DefaultBlockParameterName.LATEST)
-                    .send().transactionCount
+                val nonce = web3.ethGetTransactionCount(senderAddress, DefaultBlockParameterName.LATEST).send().transactionCount
 
                 // Gas settings
                 val gasPrice = web3.ethGasPrice().send().gasPrice
                 val gasLimit = BigInteger.valueOf(21000) // Standard for ETH transfer
 
-                // Amount to send (1 ETH in Wei)
-                val value = Convert.toWei("1", Convert.Unit.ETHER).toBigInteger()
+                // Amount to send (0.01 ETH in Wei)
+                val value = Convert.toWei("0.01", Convert.Unit.ETHER).toBigInteger()
 
                 // Create transaction
-                val rawTx = RawTransaction.createEtherTransaction(
-                    nonce,
-                    gasPrice,
-                    gasLimit,
-                    toAddress,
-                    value
-                )
+                val rawTx = RawTransaction.createEtherTransaction(nonce, gasPrice, gasLimit, toAddress, value)
 
                 // Sign transaction
                 val signedMessage = TransactionEncoder.signMessage(rawTx, credentials)
                 val hexValue = "0x" + signedMessage.toHexString()
 
-                Bukkit.getLogger().info("adding ether to new account...")
+                Bukkit.getLogger().info("Adding Ether to new account...")
 
                 // Send transaction
                 val response = web3.ethSendRawTransaction(hexValue).send()
 
                 if (response.hasError()) {
                     Bukkit.getLogger().severe("Failed to send ETH: ${response.error.message}")
+                    return@supplyAsync false // Return failure
                 } else {
-                    Bukkit.getLogger().info("Successfully sent 1 test ETH to $toAddress. Tx: ${response.transactionHash}")
+                    Bukkit.getLogger().info("Successfully sent 0.01 ETH to $toAddress. Tx: ${response.transactionHash}")
+                    return@supplyAsync true // Return success
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 Bukkit.getLogger().severe("Error funding wallet: ${e.message}")
+                return@supplyAsync false // Return failure
             }
         }
     }
+
 
     @OptIn(ExperimentalStdlibApi::class)
     fun fundWalletCoin(playerUUID: UUID, amount: Double){
@@ -157,40 +161,58 @@ class WalletManager(private val blockcoin: Blockcoin, private val web3: Web3j, p
         return balance
     }
 
+    fun getEthBalance(walletAddress: String): CompletableFuture<BigDecimal> {
+        return CompletableFuture.supplyAsync {
+            try {
+                // Fetch the balance in Wei
+                val balanceWei = web3.ethGetBalance(walletAddress, DefaultBlockParameterName.LATEST).send().balance
+                // Convert Wei to Ether
+                Convert.fromWei(balanceWei.toString(), Convert.Unit.ETHER)
+            } catch (e: Exception) {
+                Bukkit.getLogger().severe("Error getting ETH balance for wallet: $walletAddress. ${e.message}")
+                BigDecimal.ZERO // Return 0 in case of an error
+            }
+        }
+    }
+
     fun sendTokens(fromPlayer: UUID, toPlayerOrAddress: String, amount: Double): CompletableFuture<Boolean> {
-        // will need to manually top up user wallet on each transaction, or allocate a small amount of ether upon joining
         val fromWallet = playerWallets[fromPlayer] ?: return CompletableFuture.completedFuture(false)
-        // val toWallet = playerWallets[toPlayerOrAddress] ?: return CompletableFuture.completedFuture(false)
         val privateKey = playerPrivateKeys[fromPlayer] ?: return CompletableFuture.completedFuture(false)
-        val fromPlayerName = Bukkit.getPlayer(fromPlayer)?.name ?: "Unknown Player"
 
-        Bukkit.getLogger().info("Player $fromPlayerName is sending $amount tokens from wallet $fromWallet")
+        return getEthBalance(fromWallet).thenCompose { ethBalance ->
+            // Check if the balance is below the threshold
+            println(ethBalance);
+            Bukkit.getLogger().info(ethBalance.toString());
+            if (ethBalance < BigDecimal(0.01)) {
+                // Fund wallet if balance is insufficient
+                fundWalletEth(fromWallet).thenCompose {
+                    // Proceed with sending tokens after wallet has been funded
+                    executeTokenTransfer(fromWallet, toPlayerOrAddress, amount, privateKey)
+                }
+            } else {
+                // Proceed with sending tokens
+                executeTokenTransfer(fromWallet, toPlayerOrAddress, amount, privateKey)
+            }
+        }
+    }
 
-        // Check if the destination is a player or an Ethereum address
-        // instead of starts with 0x, use web3j's checksum method
+    private fun executeTokenTransfer(fromWallet: String, toPlayerOrAddress: String, amount: Double, privateKey: String): CompletableFuture<Boolean> {
+        // Determine if sending to a player or an Ethereum address
         return if (toPlayerOrAddress.startsWith("0x") && toPlayerOrAddress.length == 42) {
-            // It's an Ethereum address
-            Bukkit.getLogger().info("sending tokens to ethereum address")
-            Bukkit.getLogger().info(toPlayerOrAddress)
             blockcoin.sendTokens(fromWallet, toPlayerOrAddress, amount, privateKey)
         } else {
-            // It's a player
-            Bukkit.getLogger().info("sending tokens to player")
-            Bukkit.getLogger().info(toPlayerOrAddress)
+            // Sending to a player
             val toPlayerUUID = UUID.fromString(toPlayerOrAddress)
             val toPlayer = Bukkit.getPlayer(toPlayerUUID)
-            Bukkit.getLogger().info(""+toPlayer)
+
             if (toPlayer != null) {
-                // Player found, send tokens to the player's wallet address
                 val toWallet = playerWallets[toPlayer.uniqueId]
-                Bukkit.getLogger().info(toWallet)
                 if (toWallet != null) {
                     blockcoin.sendTokens(fromWallet, toWallet, amount, privateKey)
                 } else {
                     CompletableFuture.completedFuture(false) // Receiver does not have a wallet
                 }
             } else {
-                Bukkit.getLogger().info("receiver player not found")
                 CompletableFuture.completedFuture(false) // Receiver player not found
             }
         }

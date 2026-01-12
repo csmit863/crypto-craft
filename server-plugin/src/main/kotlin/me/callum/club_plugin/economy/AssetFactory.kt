@@ -2,6 +2,7 @@ package me.callum.club_plugin.economy
 
 import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
+import org.bukkit.Bukkit
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
@@ -18,26 +19,37 @@ import java.io.FileWriter
 import java.math.BigInteger
 
 
-// a class to interact with the AssetFactory contract
+// a singleton to interact with the AssetFactory contract
 
 // should implement:
 // - ability to mint new assets
 // - record new assets as they are created, check if they already exist
 // - 2 functions to return the token address of an item and vice versa
 
-class AssetFactory(private val factoryAddress: String, private val web3: Web3j, private val txManager: RawTransactionManager ) {
+object AssetFactory {
+    private lateinit var factoryAddress: String
+    private lateinit var web3: Web3j
+    private lateinit var txManager: RawTransactionManager
+
     private val gasProvider = DefaultGasProvider()
     private val gson = Gson()
     private val assetFile = File("plugins/ClubPlugin/assets.json")
     private val assets: MutableMap<String, String> = mutableMapOf()
 
-    init {
-        if (!assetFile.exists()) {
-            assetFile.parentFile.mkdirs()
-            saveAssets()
-        } else {
-            loadAssets()
+    fun initialize(factoryAddress: String, web3: Web3j, txManager: RawTransactionManager): AssetFactory {
+        if (!this::factoryAddress.isInitialized) {
+            this.factoryAddress = factoryAddress
+            this.web3 = web3
+            this.txManager = txManager
+
+            if (!assetFile.exists()) {
+                assetFile.parentFile.mkdirs()
+                saveAssets()
+            } else {
+                loadAssets()
+            }
         }
+        return this
     }
 
     private fun loadAssets() {
@@ -92,8 +104,7 @@ class AssetFactory(private val factoryAddress: String, private val web3: Web3j, 
         return null
     }
 
-
-    fun checkAssetExists(name: String, symbol: String): Boolean {
+    fun getAllAssets(): List<Address>{
         val getAllAssetsFunction = Function(
             "getAllAssets",
             emptyList(),
@@ -115,9 +126,14 @@ class AssetFactory(private val factoryAddress: String, private val web3: Web3j, 
             getAllAssetsFunction.outputParameters
         )
 
-        if (decoded.isEmpty()) return false
-
         val assetAddresses = decoded[0].value as List<Address>
+        return assetAddresses
+    }
+
+
+    fun checkAssetExists(name: String): Boolean {
+        val assetAddresses = getAllAssets()
+        Bukkit.getLogger().info(assetAddresses.toString())
 
         for (assetAddress in assetAddresses) {
             try {
@@ -148,7 +164,7 @@ class AssetFactory(private val factoryAddress: String, private val web3: Web3j, 
                 val existingSymbol = FunctionReturnDecoder.decode(symbolCall.value, symbolFunc.outputParameters)
                     .firstOrNull()?.value as? String ?: continue
 
-                if (existingName == name && existingSymbol == symbol) {
+                if (existingName == name) {
                     println("✅ Found asset: $existingName ($existingSymbol) at ${assetAddress.value}")
                     saveAsset(existingName, existingSymbol, assetAddress.value)
                     return true
@@ -159,7 +175,7 @@ class AssetFactory(private val factoryAddress: String, private val web3: Web3j, 
             }
         }
 
-        println("ℹ️ No matching asset found for $name ($symbol)")
+        println("ℹ️ No matching asset found for $name")
         return false
     }
 

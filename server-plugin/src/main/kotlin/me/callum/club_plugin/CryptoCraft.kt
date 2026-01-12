@@ -51,10 +51,10 @@ class CryptoCraft : JavaPlugin() {
 
         // TO IMPLEMENT:
         // uniswap = Uniswap(uniswapAddress) << check what this contract interaction needs to be
-        assetFactory = AssetFactory(assetFactoryAddress, web3j, txManager)
-        blockcoin = Blockcoin(blockCoinAddress, web3j)
+        assetFactory = AssetFactory.initialize(assetFactoryAddress, web3j, txManager)
+        blockcoin = Blockcoin.initialize(blockCoinAddress, web3j)
 
-        walletManager = WalletManager(blockcoin, web3j, txManager)
+        walletManager = WalletManager.initialize(blockcoin, web3j, txManager)
 
         logger.info("BlockCoin at $blockCoinAddress, AssetFactory at $assetFactoryAddress")
 
@@ -94,7 +94,7 @@ class CryptoCraft : JavaPlugin() {
         getCommand("bal")?.setExecutor(Bal(walletManager))
         getCommand("send")?.setExecutor(SendTokensCommand(walletManager))
         getCommand("sell")?.apply {
-            val cmd = SellItemsCommand(walletManager, assetFactory)
+            val cmd = SellItemsCommand(walletManager)
             setExecutor(cmd)
             tabCompleter = cmd
         }
@@ -105,6 +105,7 @@ class CryptoCraft : JavaPlugin() {
         //getCommand("setWeb3")?.setExecutor(SetWeb3Command(blockcoin))
         //getCommand("setFactory")?.setExecutor(SetFactoryCommand(blockcoin))
         getCommand("getConfig")?.setExecutor(GetConfigCommand())
+        getCommand("getAssets")?.setExecutor(GetAssetsCommand())
     }
 
     private fun registerEvents() {

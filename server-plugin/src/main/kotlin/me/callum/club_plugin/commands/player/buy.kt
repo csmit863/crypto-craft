@@ -1,5 +1,6 @@
 package me.callum.club_plugin.commands.player
 
+import me.callum.club_plugin.economy.AssetFactory
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
@@ -19,6 +20,9 @@ import java.util.concurrent.CompletableFuture
  * 2. The pair factory contract
  * 3. The pair contract for Blockcoin and the tokenized item
  * If these contracts do not exist, they must be created.
+ *
+ * Rule: no one should be able to buy an item unless it has been sold at least once.
+ * IE, the token must be created before it can be bought.
  */
 
 class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecutor {
@@ -48,6 +52,12 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
             sender.sendMessage(Component.text("Invalid amount: must be a positive number.").color(TextColor.color(255, 0, 0)))
             return true
         }
+
+        if (!AssetFactory.checkAssetExists(itemName)) {
+            sender.sendMessage(Component.text("The asset $itemName does not exist on the market yet!").color(TextColor.color(255, 0, 0)))
+            return true
+        }
+
         val price: Int = 1
         val coinPrice: BigDecimal = BigDecimal(price*amount)
         val balanceFuture: CompletableFuture<BigDecimal> = walletManager.getBalance(sender.uniqueId)

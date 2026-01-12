@@ -31,3 +31,6 @@ commands:
 
   getConfig:
     description: (OPERATOR ONLY) get the smart contract configuration info
+
+  getAssets:
+    description: (OPERATOR ONLY) get the minecraft assets found in the AssetFactory contract.

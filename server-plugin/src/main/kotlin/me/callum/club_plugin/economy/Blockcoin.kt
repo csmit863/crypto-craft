@@ -26,10 +26,20 @@ import java.util.concurrent.CompletableFuture
 // - get balance function (for some wallet address input)
 // - get balances function (to view all existing players balances)
 // - send function (the actual web3 interfacing functionality, not the command)
-class Blockcoin(private val blockcoinAddress: String, private val web3: Web3j) {
+object Blockcoin {
+    private lateinit var blockcoinAddress: String;
+    private lateinit var web3: Web3j;
+    private val DECIMALS: Int = 18 // Change if your token has different decimal places
 
-    private val decimals: Int = 18 // Change if your token has different decimal places
-    public val address = blockcoinAddress;
+
+    // Initialize the Blockcoin object with the necessary parameters
+    fun initialize(blockcoinAddress: String, web3: Web3j): Blockcoin {
+        this.blockcoinAddress = blockcoinAddress
+        this.web3 = web3
+        return this
+    }
+    val address: String
+        get() = blockcoinAddress
     /**
      * Retrieves the ERC-20 token balance for a given Ethereum address.
      * @param walletAddress The address to check the balance of.
