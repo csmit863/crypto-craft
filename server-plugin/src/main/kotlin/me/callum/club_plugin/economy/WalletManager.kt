@@ -114,7 +114,7 @@ object WalletManager: Listener {
                 val gasLimit = BigInteger.valueOf(21000) // Standard for ETH transfer
 
                 // Amount to send (0.01 ETH in Wei)
-                val value = Convert.toWei("0.01", Convert.Unit.ETHER).toBigInteger()
+                val value = Convert.toWei("0.05", Convert.Unit.ETHER).toBigInteger()
 
                 // Create transaction
                 val rawTx = RawTransaction.createEtherTransaction(nonce, gasPrice, gasLimit, toAddress, value)
@@ -155,6 +155,10 @@ object WalletManager: Listener {
         return playerWallets[playerUUID] // Returns Ethereum address
     }
 
+    fun getWalletAuth(playerUUID: UUID): String? {
+        return playerPrivateKeys[playerUUID] // Returns Ethereum address
+    }
+
     fun getBalance(playerUUID: UUID): CompletableFuture<BigDecimal> {
         val walletAddress = getWallet(playerUUID) ?: return CompletableFuture.failedFuture(Exception("No wallet found"))
         val balance = blockcoin.getBalance(walletAddress)
@@ -183,7 +187,7 @@ object WalletManager: Listener {
             // Check if the balance is below the threshold
             println(ethBalance);
             Bukkit.getLogger().info(ethBalance.toString());
-            if (ethBalance < BigDecimal(0.01)) {
+            if (ethBalance < BigDecimal(0.05)) {
                 // Fund wallet if balance is insufficient
                 fundWalletEth(fromWallet).thenCompose {
                     // Proceed with sending tokens after wallet has been funded

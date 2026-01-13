@@ -79,7 +79,7 @@ class MinecraftAsset(private val tokenAddress: String, private val web3: Web3j, 
         }
     }
 
-    fun mint(walletAddress: String, amount: BigInteger): String? {
+    fun mint(walletAddress: String, amount: BigInteger): String? { // has to be admin
         val mintFunction = Function(
             "tokenizeItems",
             listOf(Address(walletAddress), Uint256(amount)),
@@ -188,4 +188,37 @@ class MinecraftAsset(private val tokenAddress: String, private val web3: Web3j, 
         println("❌ No receipt found within the timeout period for tx: $txHash")
         return null
     }
+
+    /**
+     * Approves the specified spender to spend the given amount of tokens on behalf of the caller.
+     */
+    public fun approveSpending(spenderAddress: String, amount: BigInteger, providedTxManager: RawTransactionManager): String? {
+        val approveFunction = Function(
+            "approve",
+            listOf(Address(spenderAddress), Uint256(amount)), // Parameters: spender address and amount
+            emptyList()  // No return values expected
+        )
+
+        val encodedFunction = FunctionEncoder.encode(approveFunction)
+
+        return try {
+            val transactionResponse = providedTxManager.sendTransaction(
+                DefaultGasProvider.GAS_PRICE,
+                DefaultGasProvider.GAS_LIMIT,
+                tokenAddress,
+                encodedFunction,
+                BigInteger.ZERO
+            )
+
+            println("Minecraft Asset approval transaction sent ($amount approved): ${transactionResponse.transactionHash}")
+
+            // Get the receipt and return the transaction hash on success
+            val receipt = waitForReceipt(transactionResponse.transactionHash)
+            receipt?.transactionHash  // Return the transaction hash (String?)
+        } catch (e: Exception) {
+            println("Exception during approval: ${e.message}")
+            null
+        }
+    }
+
 }

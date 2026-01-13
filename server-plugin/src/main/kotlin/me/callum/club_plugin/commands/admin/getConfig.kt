@@ -1,5 +1,7 @@
 package me.callum.club_plugin.commands.admin
 
+import me.callum.club_plugin.economy.Blockcoin
+import me.callum.club_plugin.economy.Uniswap
 import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -13,12 +15,15 @@ class GetConfigCommand() : CommandExecutor {
             return true
         }
 
-        var factory = "<factory address>"//blockcoin.factoryAddress
-        var blockcoin = "<blockcoin address>"//blockcoin.blockcoinAddress
+        var factory = Uniswap.v2factoryAddress
+        var router = Uniswap.v2routerAddress
+        var blockcoin = Blockcoin.address
         Bukkit.getLogger().info("Factory address $factory")
+        Bukkit.getLogger().info("Router address $router")
         Bukkit.getLogger().info("Blockcoin address $blockcoin")
 
         sender.sendMessage("Factory address $factory")
+        sender.sendMessage("Router address $router")
         sender.sendMessage("Blockcoin address $blockcoin")
 
         return true

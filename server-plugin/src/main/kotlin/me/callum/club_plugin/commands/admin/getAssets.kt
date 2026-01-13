@@ -1,9 +1,6 @@
 package me.callum.club_plugin.commands.admin
 
-import me.callum.club_plugin.economy.AssetDetails
-import me.callum.club_plugin.economy.AssetFactory
-import me.callum.club_plugin.economy.MinecraftAsset
-import me.callum.club_plugin.economy.WalletManager
+import me.callum.club_plugin.economy.*
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.event.HoverEvent
@@ -17,37 +14,56 @@ import org.web3j.protocol.Web3j
 import org.web3j.tx.RawTransactionManager
 import java.math.BigInteger
 
-class GetAssetsCommand() : CommandExecutor {
+class GetAssetsCommand : CommandExecutor {
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
+    override fun onCommand(
+        sender: CommandSender,
+        command: Command,
+        label: String,
+        args: Array<out String>
+    ): Boolean {
+
         if (sender is Player && !sender.isOp) {
             sender.sendMessage("You do not have permission to use this command.")
             return true
         }
 
-        val assetList = AssetFactory.getAllAssets()
+        sender.sendMessage("Uniswap Pairs:")
 
-        sender.sendMessage("Minecraft Assets:")
+        // ONE async entry point
+        Uniswap.getAllPairs().thenAccept { pairs ->
 
-        for (assetAddress in assetList) {
-            val asset = MinecraftAsset(assetAddress.toString(), WalletManager.web3, WalletManager.txManager) // Assuming AssetFactory has web3 and txManager
-            val details: AssetDetails = asset.getAssetDetails();
-            val name = details.name
-            val symbol = details.symbol
+            if (pairs.isEmpty()) {
+                sender.sendMessage("No pairs found.")
+                return@thenAccept
+            }
 
-            val minecraftAssetComponent = Component.text("$name ($symbol): ")
-                .color(TextColor.color(0, 255, 255))
-                .append(
-                    Component.text(assetAddress.toString())
-                        .color(TextColor.color(0, 255, 127))
-                        .hoverEvent(HoverEvent.showText(Component.text("Click to copy!").color(TextColor.color(255, 255, 0))))
-                        .clickEvent(ClickEvent.copyToClipboard(assetAddress.toString()))
-                )
+            pairs.forEachIndexed { index, pairAddress ->
 
-            sender.sendMessage(minecraftAssetComponent)
+                // Fetch reserves for each pair
+                Uniswap.getReserves(pairAddress).thenAccept { reserves ->
+                    val reserveA = reserves.first
+                    val reserveB = reserves.second
 
+                    Bukkit.getLogger().info(
+                        "Pair[$index] $pairAddress | A=$reserveA B=$reserveB"
+                    )
+
+                    sender.sendMessage(
+                        "Pair[$index]: $pairAddress"
+                    )
+                    sender.sendMessage(
+                        "  Reserves -> A: $reserveA | B: $reserveB"
+                    )
+                }
+            }
+        }.exceptionally { ex ->
+            ex.printStackTrace()
+            sender.sendMessage("Failed to fetch pairs.")
+            null
         }
 
         return true
     }
 }
+

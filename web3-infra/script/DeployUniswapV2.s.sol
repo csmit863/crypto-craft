@@ -14,15 +14,15 @@ contract DeployUniswapV2Testnet is Script {
 
         // 1. Deploy WETH
         WETH9 weth = new WETH9();
-        console.log("WETH deployed at:", address(weth));
+        //console.log("WETH deployed at:", address(weth));
 
         // 2. Deploy Uniswap Factory
         address factory = address(UniswapV2FactoryDeployer.deploy(deployer));
-        console.log("Factory deployed at:", factory);
+        console.log(factory);
 
         // 3. Deploy Router
         address router = address(UniswapV2Router02Deployer.deploy(factory, address(weth)));
-        console.log("Router deployed at:", router);
+        console.log(router);
 
         vm.stopBroadcast();
     }

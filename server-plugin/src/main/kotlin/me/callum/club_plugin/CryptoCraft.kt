@@ -11,6 +11,7 @@ import me.callum.club_plugin.commands.player.SellItemsCommand
 import me.callum.club_plugin.commands.player.SendTokensCommand
 import me.callum.club_plugin.commands.player.CheckPriceCommand
 import me.callum.club_plugin.economy.AssetFactory
+import me.callum.club_plugin.economy.Uniswap
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.http.HttpService
@@ -28,10 +29,7 @@ class CryptoCraft : JavaPlugin() {
     private lateinit var blockcoin: Blockcoin
     private lateinit var walletManager: WalletManager
     private lateinit var assetFactory: AssetFactory
-
-    private lateinit var wethAddress: String
-    private lateinit var uniswapFactoryAddress: String
-    private lateinit var uniswapRouterAddress: String
+    private lateinit var uniswap: Uniswap
 
     override fun onEnable() {
 
@@ -39,35 +37,29 @@ class CryptoCraft : JavaPlugin() {
         val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
         val rpcUrl: String = "https://testnet.qutblockchain.club"
         val web3j: Web3j = Web3j.build(HttpService(rpcUrl))
-        val txManager = RawTransactionManager(web3j, adminSigner)
+        val adminTxManager = RawTransactionManager(web3j, adminSigner)
 
-        // ✅ Load main deployments
+        // ✅ Load contract deployment logs
         val mainDeployment = loadDeploymentData("/me/callum/club_plugin/assets/deployments.json")
+        val uniswapDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
 
         val blockCoinAddress = mainDeployment.logs.getOrNull(0)
             ?: throw IllegalStateException("Missing BlockCoin address")
         val assetFactoryAddress = mainDeployment.logs.getOrNull(1)
             ?: throw IllegalStateException("Missing AssetFactory address")
+        val uniswapFactoryAddress = uniswapDeployment.logs.getOrNull(0)
+            ?: throw IllegalStateException("Missing Uniswap Factory address")
+        val uniswapRouterAddress = uniswapDeployment.logs.getOrNull(1)
+            ?: throw IllegalStateException("Missing Uniswap Router address")
 
         // TO IMPLEMENT:
-        // uniswap = Uniswap(uniswapAddress) << check what this contract interaction needs to be
-        assetFactory = AssetFactory.initialize(assetFactoryAddress, web3j, txManager)
-        blockcoin = Blockcoin.initialize(blockCoinAddress, web3j)
-
-        walletManager = WalletManager.initialize(blockcoin, web3j, txManager)
+        assetFactory = AssetFactory.initialize(assetFactoryAddress, web3j, adminTxManager)
+        blockcoin = Blockcoin.initialize(blockCoinAddress, web3j, adminTxManager)
+        walletManager = WalletManager.initialize(blockcoin, web3j, adminTxManager)
+        uniswap = Uniswap.initialize(uniswapFactoryAddress, uniswapRouterAddress, web3j, adminTxManager)
 
         logger.info("BlockCoin at $blockCoinAddress, AssetFactory at $assetFactoryAddress")
-
-        // ✅ Load Uniswap deployments
-        val uniDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
-        wethAddress = uniDeployment.logs.getOrNull(0)?.substringAfter(": ")
-            ?: throw IllegalStateException("Missing WETH address")
-        uniswapFactoryAddress = uniDeployment.logs.getOrNull(1)?.substringAfter(": ")
-            ?: throw IllegalStateException("Missing Factory address")
-        uniswapRouterAddress = uniDeployment.logs.getOrNull(2)?.substringAfter(": ")
-            ?: throw IllegalStateException("Missing Router address")
-
-        logger.info("Uniswap WETH at $wethAddress, Factory at $uniswapFactoryAddress, Router at $uniswapRouterAddress")
+        logger.info("Uniswap Factory at $uniswapFactoryAddress, Router at $uniswapRouterAddress")
 
         registerCommands()
         registerEvents()

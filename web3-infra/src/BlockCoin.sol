@@ -10,6 +10,6 @@ contract BlockCoin is ERC20, Ownable {
     ERC20("BlockCoin","BLCK")
     Ownable(msg.sender)
     {
-        _mint(msg.sender, 10000*10**18);
+        _mint(msg.sender, 3000000*10**18);
     }
 }

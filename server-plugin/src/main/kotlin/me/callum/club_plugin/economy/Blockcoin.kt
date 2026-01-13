@@ -2,6 +2,7 @@ package me.callum.club_plugin.economy
 
 import org.bukkit.Bukkit
 import org.web3j.abi.FunctionEncoder
+import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
 import org.web3j.abi.datatypes.Function
@@ -14,6 +15,8 @@ import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
+import org.web3j.tx.RawTransactionManager
+import org.web3j.tx.gas.DefaultGasProvider
 import org.web3j.utils.Convert
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -28,13 +31,15 @@ import java.util.concurrent.CompletableFuture
 // - send function (the actual web3 interfacing functionality, not the command)
 object Blockcoin {
     private lateinit var blockcoinAddress: String;
-    private lateinit var web3: Web3j;
+    public lateinit var web3: Web3j;
+    private lateinit var txManager: RawTransactionManager
     private val DECIMALS: Int = 18 // Change if your token has different decimal places
 
 
     // Initialize the Blockcoin object with the necessary parameters
-    fun initialize(blockcoinAddress: String, web3: Web3j): Blockcoin {
+    fun initialize(blockcoinAddress: String, web3: Web3j, txManager: RawTransactionManager): Blockcoin {
         this.blockcoinAddress = blockcoinAddress
+        this.txManager = txManager
         this.web3 = web3
         return this
     }
@@ -74,6 +79,26 @@ object Blockcoin {
             CompletableFuture.completedFuture(BigDecimal.ZERO) // Return zero on error
         }
     }
+
+    fun getBalanceWei(walletAddress: String): CompletableFuture<BigInteger> {
+        val function = Function(
+            "balanceOf",
+            listOf(Address(walletAddress)),
+            listOf(object : TypeReference<Uint256>() {})
+        )
+
+        val encoded = FunctionEncoder.encode(function)
+
+        return web3.ethCall(
+            Transaction.createEthCallTransaction(walletAddress, blockcoinAddress, encoded),
+            DefaultBlockParameterName.LATEST
+        ).sendAsync().thenApply { result ->
+            val decoded = FunctionReturnDecoder.decode(result.value, function.outputParameters)
+            if (decoded.isEmpty()) BigInteger.ZERO
+            else (decoded[0] as Uint256).value
+        }
+    }
+
 
 
 
@@ -193,6 +218,59 @@ object Blockcoin {
             CompletableFuture.completedFuture(false) // Return false on error
         }
     }
+
+    private fun waitForReceipt(txHash: String, timeoutMs: Long = 15000): TransactionReceipt? {
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            val receiptOpt = web3.ethGetTransactionReceipt(txHash).send().transactionReceipt
+            if (receiptOpt.isPresent) {
+                val receipt = receiptOpt.get()
+                if (receipt.status == "0x1") {
+                    println("✅ Transaction successful: $txHash")
+                    return receipt
+                } else {
+                    println("❌ Transaction failed with status: ${receipt.status} for tx: $txHash")
+                    return null
+                }
+            }
+            Thread.sleep(1000)
+        }
+        println("❌ No receipt found within the timeout period for tx: $txHash")
+        return null
+    }
+
+    /**
+     * Approves the specified spender to spend the given amount of tokens on behalf of the caller.
+     */
+    public fun approveSpending(spenderAddress: String, amount: BigInteger, providedTxManager: RawTransactionManager): String? {
+        val approveFunction = Function(
+            "approve",
+            listOf(Address(spenderAddress), Uint256(amount)), // Parameters: spender address and amount
+            emptyList()  // No return values expected
+        )
+
+        val encodedFunction = FunctionEncoder.encode(approveFunction)
+
+        return try {
+            val transactionResponse = providedTxManager.sendTransaction(
+                DefaultGasProvider.GAS_PRICE,
+                DefaultGasProvider.GAS_LIMIT,
+                this.address,
+                encodedFunction,
+                BigInteger.ZERO
+            )
+
+            println("Blockcoin approval transaction sent ($amount approved): ${transactionResponse.transactionHash}")
+
+            // Get the receipt and return the transaction hash on success
+            val receipt = waitForReceipt(transactionResponse.transactionHash)
+            receipt?.transactionHash  // Return the transaction hash (String?)
+        } catch (e: Exception) {
+            println("Exception during approval: ${e.message}")
+            null
+        }
+    }
+
 
 
 }

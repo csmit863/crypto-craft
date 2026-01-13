@@ -1,9 +1,9 @@
 package me.callum.club_plugin.commands.player
 
-import me.callum.club_plugin.economy.AssetFactory
-import me.callum.club_plugin.economy.WalletManager
+import me.callum.club_plugin.economy.*
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
+import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -11,7 +11,12 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.web3j.abi.datatypes.Address
+import org.web3j.abi.datatypes.generated.Uint256
+import org.web3j.crypto.Credentials
 import org.web3j.crypto.Keys
+import org.web3j.tx.RawTransactionManager
+import java.math.BigInteger
 
 
 /**
@@ -20,7 +25,17 @@ import org.web3j.crypto.Keys
  * 2. The pair factory contract []
  * 3. The pair contract for Blockcoin and the tokenized item []
  * If these contracts do not exist, they must be created.
+ * The first time an item is created, the player who does so should receive
+ * an award of 1000 blockcoins. This is how new blockcoin will enter circulation.
+ * These 1000 blockcoins will be added to the pair pool automatically.
+ * How it works:
+ * Player sells 1 dirt -> dirt tokenized -> pair created (dirt/blck)
+ * -> liquidity added (1 dirt / 1000 blck) -> 
  */
+
+// logarithmic cap?
+// bulk buy?
+// what if a player buys 200,000 sticks?
 
 class SellItemsCommand(private val walletManager: WalletManager) : CommandExecutor, TabCompleter {
 
@@ -99,21 +114,78 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
         // this function should be used in the event that:
         // there is no minecraft asset created by the factory that matches the required item (e.g. diamond, DIAM)
         val alreadyExists = AssetFactory.checkAssetExists(name)
+        val ERC20_DECIMALS = BigInteger.TEN.pow(18)
 
         if (!alreadyExists) {
+            // Step 1: Create asset if missing
             AssetFactory.createAsset(name, symbol)
-
             val newAddress = AssetFactory.getAssetAddress(name, symbol)
-            if (newAddress == null) {
-                sender.sendMessage(Component.text("❌ Failed to create token for $rawMaterialName. Try again").color(TextColor.color(255, 0, 0)))
-                return true
+                ?: run {
+                    sender.sendMessage(Component.text("❌ Failed to create token for $rawMaterialName"))
+                    return true
+                }
+
+            // Step 2: Create pair (optional, router can do this implicitly)
+            Uniswap.createPair(Blockcoin.address, newAddress)
+
+            // --- Signers ---
+            val adminTxManager = AssetFactory.txManager
+            val adminAddress = Address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+
+            val mcAsset = MinecraftAsset(newAddress, Blockcoin.web3, adminTxManager)
+
+            // --- Amounts (HUMAN → WEI) ---
+            val blockcoinAmount = BigInteger("1000").multiply(ERC20_DECIMALS)
+            val assetAmount     = BigInteger.ONE.multiply(ERC20_DECIMALS)
+
+            // Slippage protection (1%)
+            val blockcoinMin = blockcoinAmount.multiply(BigInteger("99")).divide(BigInteger("100"))
+            val assetMin     = assetAmount.multiply(BigInteger("99")).divide(BigInteger("100"))
+
+            val deadline = Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300))
+
+            // Step 3: Mint asset tokens to admin
+            mcAsset.mint(adminAddress.toString(), assetAmount)
+
+            // Step 4: Approve router (ADMIN MUST SIGN)
+            Blockcoin.approveSpending(
+                Uniswap.v2routerAddress,
+                blockcoinAmount,
+                adminTxManager
+            )
+
+            mcAsset.approveSpending(
+                Uniswap.v2routerAddress,
+                assetAmount,
+                adminTxManager
+            )
+
+            // Check that balances are sufficient
+            val balanceWei = Blockcoin.getBalanceWei(adminAddress.toString()).get()
+
+            require(balanceWei >= blockcoinAmount) {
+                "Admin does not have enough Blockcoin for liquidity"
             }
-            sender.sendMessage(Component.text(newAddress));
-            val checksummed = Keys.toChecksumAddress(newAddress.toString())
+
+            val receipt = Uniswap.addLiquidity(
+                Blockcoin.address,
+                newAddress,
+                blockcoinAmount,
+                assetAmount,
+                blockcoinMin,
+                assetMin,
+                adminAddress,
+                deadline,
+                adminTxManager
+            )
+
+            Bukkit.getLogger().info("addLiquidity tx: ${receipt.transactionHash}")
 
 
+            // Step 6: Persist asset
+            val checksummed = Keys.toChecksumAddress(newAddress)
             AssetFactory.saveAsset(name, symbol, checksummed)
-            sender.sendMessage(Component.text("✅ Created new token for $rawMaterialName").color(TextColor.color(0, 255, 0)))
+
         } else {
             sender.sendMessage(Component.text("ℹ️ Token exists for $rawMaterialName").color(TextColor.color(200, 200, 0)))
             val assetAddress = AssetFactory.getAssetAddress(name, symbol)

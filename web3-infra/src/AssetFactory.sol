@@ -21,4 +21,3 @@ contract AssetFactory is Ownable {
         return allAssets;
     }
 }
-    

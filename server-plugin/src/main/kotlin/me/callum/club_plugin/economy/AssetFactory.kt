@@ -29,7 +29,7 @@ import java.math.BigInteger
 object AssetFactory {
     private lateinit var factoryAddress: String
     private lateinit var web3: Web3j
-    private lateinit var txManager: RawTransactionManager
+    public lateinit var txManager: RawTransactionManager
 
     private val gasProvider = DefaultGasProvider()
     private val gson = Gson()
@@ -131,10 +131,12 @@ object AssetFactory {
     }
 
 
+    fun normalizeName(name: String?): String {
+        return name?.lowercase()?.replace("[_\\s]+".toRegex(), "")?.trim() ?: ""
+    }
+
     fun checkAssetExists(name: String): Boolean {
         val assetAddresses = getAllAssets()
-        Bukkit.getLogger().info(assetAddresses.toString())
-        Bukkit.getLogger().info("Just logged the asset addresses")
 
         for (assetAddress in assetAddresses) {
             try {
@@ -165,7 +167,9 @@ object AssetFactory {
                 val existingSymbol = FunctionReturnDecoder.decode(symbolCall.value, symbolFunc.outputParameters)
                     .firstOrNull()?.value as? String ?: continue
 
-                if (existingName.lowercase() == name.lowercase()) {
+                // Normalize names
+                Bukkit.getLogger().info("${normalizeName(existingName)}, ${normalizeName(name)}")
+                if (normalizeName(existingName) == normalizeName(name)) {
                     println("✅ Found asset: $existingName ($existingSymbol) at ${assetAddress.value}")
                     saveAsset(existingName, existingSymbol, assetAddress.value)
                     return true
@@ -180,10 +184,12 @@ object AssetFactory {
         return false
     }
 
+
     fun createAsset(name: String, symbol: String): String? {
+        val upload_name = normalizeName(name)
         val function = Function(
             "createAsset",
-            listOf(Utf8String(name), Utf8String(symbol)),
+            listOf(Utf8String(upload_name), Utf8String(symbol)),
             emptyList()
         )
 
