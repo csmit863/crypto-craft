@@ -336,6 +336,28 @@ object Uniswap: IUniswap {
         }
     }
 
+    fun getToken0(pairAddress: String): CompletableFuture<String> {
+        val function = Function(
+            "token0",
+            emptyList(),
+            listOf(object : TypeReference<Address>() {})
+        )
+
+        val encoded = FunctionEncoder.encode(function)
+
+        return web3.ethCall(
+            Transaction.createEthCallTransaction(pairAddress, pairAddress, encoded),
+            DefaultBlockParameterName.LATEST
+        ).sendAsync().thenApply { response ->
+            val decoded = org.web3j.abi.FunctionReturnDecoder.decode(response.value, function.outputParameters)
+            if (decoded.isNotEmpty()) (decoded[0] as Address).value else "0x0000000000000000000000000000000000000000"
+        }.exceptionally { ex ->
+            ex.printStackTrace()
+            "0x0000000000000000000000000000000000000000"
+        }
+    }
+
+
     public fun getReserves(pairAddress: String): CompletableFuture<Pair<BigInteger, BigInteger>> {
         return try {
             // Define the function to call the reserves method
@@ -456,7 +478,51 @@ object Uniswap: IUniswap {
          }
          return receipt.toString()
 
-     }
+    }
+
+    fun swapExactTokensForTokens(
+        amountIn: BigInteger,
+        amountOutMin: BigInteger,
+        path: List<String>,
+        to: Address,
+        deadline: Uint256,
+        senderTxManager: RawTransactionManager
+    ): TransactionReceipt {
+
+        val function = Function(
+            "swapExactTokensForTokens",
+            listOf(
+                Uint256(amountIn),
+                Uint256(amountOutMin),
+                org.web3j.abi.datatypes.DynamicArray(Address::class.java, path.map { Address(it) }),
+                to,
+                deadline
+            ),
+            listOf(object : TypeReference<org.web3j.abi.datatypes.generated.Uint256>() {})
+        )
+
+        val encoded = FunctionEncoder.encode(function)
+
+        val tx = senderTxManager.sendTransaction(
+            gasProvider.gasPrice,
+            gasProvider.getGasLimit("swapExactTokensForTokens"),
+            v2routerAddress,
+            encoded,
+            BigInteger.ZERO
+        )
+
+        require(tx.transactionHash != null) { "swapExactTokensForTokens tx hash is null" }
+
+        val receipt = waitForReceipt(tx.transactionHash)
+            ?: error("No receipt for swapExactTokensForTokens")
+
+        require(receipt.status == "0x1") {
+            "swapExactTokensForTokens reverted: ${tx.transactionHash}"
+        }
+        Bukkit.getLogger().info("swapExactTokensForTokens tx sent: ${tx.transactionHash}")
+        return receipt
+    }
+
 
 
 }

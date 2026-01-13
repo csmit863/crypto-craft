@@ -7,7 +7,6 @@ import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
-import org.bukkit.entity.Player
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -38,12 +37,7 @@ class CheckPriceCommand : CommandExecutor {
             return true
         }
 
-        // Resolve asset → ERC20
-        val assetAddress = AssetFactory.getAssetAddress(
-            material.name.lowercase(),
-            material.name.take(4).uppercase()
-        )
-
+        val assetAddress = AssetFactory.getAssetAddress(material.name.lowercase())
         if (assetAddress == null) {
             sender.sendMessage(
                 Component.text("No market exists for ${material.name.lowercase()}")
@@ -52,24 +46,21 @@ class CheckPriceCommand : CommandExecutor {
             return true
         }
 
-        // Find Blockcoin ↔ Asset pair
+        // Fetch the pair
         Uniswap.getPair(Blockcoin.address, assetAddress).thenAccept { pairAddress ->
 
             if (pairAddress == "0x0000000000000000000000000000000000000000") {
                 sender.sendMessage(
-                    Component.text("No liquidity pool for ${material.name.lowercase()}")
+                    Component.text("No liquidity pool exists for ${material.name.lowercase()}")
                         .color(TextColor.color(255, 165, 0))
                 )
                 return@thenAccept
             }
 
-            // Read reserves
+            // Fetch reserves
             Uniswap.getReserves(pairAddress).thenAccept { reserves ->
 
-                val reserveBlockcoin = reserves.first
-                val reserveAsset = reserves.second
-
-                if (reserveBlockcoin == BigInteger.ZERO || reserveAsset == BigInteger.ZERO) {
+                if (reserves.first == BigInteger.ZERO || reserves.second == BigInteger.ZERO) {
                     sender.sendMessage(
                         Component.text("Market exists but has no liquidity.")
                             .color(TextColor.color(255, 0, 0))
@@ -77,17 +68,28 @@ class CheckPriceCommand : CommandExecutor {
                     return@thenAccept
                 }
 
-                // Convert to human units (18 decimals)
-                val rb = BigDecimal(reserveBlockcoin).movePointLeft(18)
-                val ra = BigDecimal(reserveAsset).movePointLeft(18)
+                // Determine which reserve is Blockcoin vs. asset
+                Uniswap.getToken0(pairAddress).thenAccept { token0 ->
+                    val (reserveBlockcoin, reserveAsset) = if (token0.equals(Blockcoin.address, ignoreCase = true)) {
+                        Pair(reserves.first, reserves.second)
+                    } else {
+                        Pair(reserves.second, reserves.first)
+                    }
 
-                val price = rb.divide(ra, 8, RoundingMode.HALF_UP)
+                    // Convert to human-readable decimals (18 assumed)
+                    val rb = BigDecimal(reserveBlockcoin).movePointLeft(18)
+                    val ra = BigDecimal(reserveAsset).movePointLeft(18)
 
-                sender.sendMessage(
-                    Component.text(
-                        "1 ${material.name.lowercase().replace("_", " ")} costs $price Blockcoin"
-                    ).color(TextColor.color(0, 255, 0))
-                )
+                    val rawPrice = rb.divide(ra, 8, RoundingMode.HALF_UP)
+                    val priceStr = rawPrice.stripTrailingZeros().toPlainString()
+
+                    val displayName = material.name.lowercase().replace("_", " ")
+
+                    sender.sendMessage(
+                        Component.text("1 $displayName costs $priceStr Blockcoin")
+                            .color(TextColor.color(0, 255, 0))
+                    )
+                }
             }
         }
 

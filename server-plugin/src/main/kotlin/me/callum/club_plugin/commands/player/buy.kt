@@ -1,6 +1,8 @@
 package me.callum.club_plugin.commands.player
 
 import me.callum.club_plugin.economy.AssetFactory
+import me.callum.club_plugin.economy.Blockcoin
+import me.callum.club_plugin.economy.Uniswap
 import me.callum.club_plugin.economy.WalletManager
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.TextColor
@@ -12,8 +14,11 @@ import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.web3j.abi.datatypes.Address
+import org.web3j.tx.RawTransactionManager
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
+import org.web3j.crypto.Credentials
 
 /**
  * To sell items, some contracts have to exist:
@@ -60,7 +65,7 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
             return true
         }
 
-        val price: Int = 1
+        val price: Int = 1 // will have to implement uniswap quoting
         val coinPrice: BigDecimal = BigDecimal(price*amount)
         val balanceFuture: CompletableFuture<BigDecimal> = walletManager.getBalance(sender.uniqueId)
         // ether balance errors. if the account does not have ether, the transaction will fail: "Transaction failed: Insufficient funds for gas * price + value".
@@ -69,25 +74,44 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
             if (balance < coinPrice) {
                 sender.sendMessage(Component.text("You don't have enough coins."))
             } else {
-                walletManager.sendTokens(
-                    sender.uniqueId,
-                    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-                    coinPrice.toDouble()
-                ).thenAccept { success ->
-                    if (success) {
-                        val itemToAdd = ItemStack(material, amount)
-                        sender.inventory.addItem(itemToAdd)
-                        sender.sendMessage(Component.text("Purchased $amount ${material.name.lowercase().replace("_", " ")} with $coinPrice blockcoins.")
-                            .color(TextColor.color(0, 255, 0)))
-                    } else {
-                        sender.sendMessage(Component.text("Failed to send tokens. Please try again.")
-                            .color(TextColor.color(255, 0, 0)))
-                    }
-                }.exceptionally { throwable ->
-                    sender.sendMessage(Component.text("An error occurred: ${throwable.message}")
-                        .color(TextColor.color(255, 0, 0)))
-                    null // Return null to satisfy the CompletableFuture
+                val itemTokenAddress = AssetFactory.getAssetAddress(itemName)
+                if (itemTokenAddress == null) {
+                    sender.sendMessage(Component.text("Failed to find token address for $itemName").color(TextColor.color(255, 0, 0)))
+                    return@thenAccept
                 }
+
+                val paymentTokenAddress = Blockcoin.address
+                val amountIn = coinPrice.toBigInteger()
+                val amountOutMin = BigInteger.ZERO  // could calculate via Uniswap quote
+                val path = listOf(paymentTokenAddress, itemTokenAddress)
+                val recipient = Address(walletManager.getWallet(sender.uniqueId))
+                val deadline = org.web3j.abi.datatypes.generated.Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300))
+
+                val userSigner = Credentials.create(WalletManager.getWalletAuth(sender.uniqueId))
+                val userTxManager = RawTransactionManager(Blockcoin.web3, userSigner)
+
+                CompletableFuture.supplyAsync {
+                    Uniswap.swapExactTokensForTokens(
+                        amountIn,
+                        amountOutMin,
+                        path,
+                        recipient,
+                        deadline,
+                        userTxManager
+                    )
+                }.thenAccept { receipt ->
+                    // Only give items after a successful swap
+                    val itemToAdd = ItemStack(material, amount)
+                    sender.inventory.addItem(itemToAdd)
+                    sender.sendMessage(Component.text(
+                        "Purchased $amount ${material.name.lowercase().replace("_", " ")} with $coinPrice blockcoins."
+                    ).color(TextColor.color(0, 255, 0)))
+                }.exceptionally { throwable ->
+                    sender.sendMessage(Component.text("Swap failed: ${throwable.message}")
+                        .color(TextColor.color(255, 0, 0)))
+                    null
+                }
+
             }
         }
         return true

@@ -41,12 +41,12 @@ class GetAssetsCommand : CommandExecutor {
                     val price = BigDecimal(reserve0)
                         .movePointLeft(18)
                         .divide(BigDecimal(reserve1).movePointLeft(18), 8, RoundingMode.HALF_UP)
-
+                    val priceStr = price.stripTrailingZeros().toPlainString()
                     sender.sendMessage(
                         Component.text("Pair[$index]: $pairAddress").color(TextColor.color(0, 255, 255))
                     )
                     sender.sendMessage(
-                        Component.text("  Price (reserve0/reserve1): $price").color(TextColor.color(0, 255, 0))
+                        Component.text("  Price (reserve0/reserve1): $priceStr").color(TextColor.color(0, 255, 0))
                     )
                 }
             }

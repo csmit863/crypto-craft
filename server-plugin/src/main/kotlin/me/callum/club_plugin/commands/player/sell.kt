@@ -119,7 +119,7 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
         if (!alreadyExists) {
             // Step 1: Create asset if missing
             AssetFactory.createAsset(name, symbol)
-            val newAddress = AssetFactory.getAssetAddress(name, symbol)
+            val newAddress = AssetFactory.getAssetAddress(name)
                 ?: run {
                     sender.sendMessage(Component.text("❌ Failed to create token for $rawMaterialName"))
                     return true
@@ -184,11 +184,11 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
 
             // Step 6: Persist asset
             val checksummed = Keys.toChecksumAddress(newAddress)
-            AssetFactory.saveAsset(name, symbol, checksummed)
+            AssetFactory.saveAsset(name, checksummed)
 
         } else {
             sender.sendMessage(Component.text("ℹ️ Token exists for $rawMaterialName").color(TextColor.color(200, 200, 0)))
-            val assetAddress = AssetFactory.getAssetAddress(name, symbol)
+            val assetAddress = AssetFactory.getAssetAddress(name)
             val checksummed = Keys.toChecksumAddress(assetAddress.toString())
 
             println(checksummed)
@@ -210,7 +210,7 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
             sender.sendMessage(Component.text("❌ You don't have a wallet yet. Please create one first.").color(TextColor.color(255, 0, 0)))
             return true
         }
-        val assetAddress = AssetFactory.getAssetAddress(name, symbol)
+        val assetAddress = AssetFactory.getAssetAddress(name)
         val checksummed = Keys.toChecksumAddress(assetAddress.toString())
 
         if (checksummed == null) {
@@ -221,6 +221,8 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
         val price = 1 // expected swap price needs to be fetched from the AMM.
 
         sender.sendMessage("Minting asset at contract address $checksummed")
+
+        println("sell.kt:: $checksummed, $amountToRemove, $walletAddress")
         val txHash = AssetFactory.mintAsset(checksummed, amountToRemove, walletAddress)
         if (txHash == null) {
             sender.sendMessage(Component.text("❌ Failed to mint tokenized asset to your wallet").color(TextColor.color(255, 0, 0)))

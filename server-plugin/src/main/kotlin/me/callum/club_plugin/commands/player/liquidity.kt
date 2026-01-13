@@ -6,13 +6,14 @@ import org.bukkit.command.CommandSender
 
 
 // contains two functions: add and remove.
-class add : CommandExecutor {
+// someone else should do this have fun :D
+class addLiquidity : CommandExecutor {
     override fun onCommand(p0: CommandSender, p1: Command, p2: String, p3: Array<out String>): Boolean {
         TODO("Not yet implemented")
     }
 }
 
-class remove: CommandExecutor {
+class removeLiquidity: CommandExecutor {
     override fun onCommand(p0: CommandSender, p1: Command, p2: String, p3: Array<out String>): Boolean {
         TODO("Not yet implemented")
     }

@@ -10,13 +10,16 @@ import org.web3j.abi.datatypes.Address
 import org.web3j.abi.datatypes.Function
 import org.web3j.abi.datatypes.Utf8String
 import org.web3j.crypto.Credentials
+import org.web3j.crypto.Hash
 import org.web3j.protocol.Web3j
+import org.web3j.protocol.core.methods.response.TransactionReceipt
 import org.web3j.tx.RawTransactionManager
 import org.web3j.tx.gas.DefaultGasProvider
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
 import java.math.BigInteger
+import java.util.concurrent.CompletableFuture
 
 
 // a singleton to interact with the AssetFactory contract
@@ -74,15 +77,22 @@ object AssetFactory {
         }
     }
 
-    fun saveAsset(name: String, symbol: String, address: String) {
-        println("Saving asset: $name ($symbol) -> $address")
-        assets["$name|$symbol"] = address
+    fun saveAsset(name: String, address: String) {
+        val normalized = normalizeName(name)
+
+        require(address.startsWith("0x") && address.length == 42) {
+            "Invalid asset address: $address"
+        }
+
+        assets[normalized] = address
         saveAssets()
     }
 
-    fun getAssetAddress(name: String, symbol: String): String? {
-        println("Getting asset address for $name ($symbol)")
-        return assets["$name|$symbol"]
+
+    fun getAssetAddress(name: String): String? {
+        val normalized = normalizeName(name)
+        println("Getting asset address for $normalized")
+        return assets[normalized]
     }
 
     fun waitForReceipt(txHash: String, timeoutMs: Long = 15000): org.web3j.protocol.core.methods.response.TransactionReceipt? {
@@ -103,6 +113,33 @@ object AssetFactory {
         println("❌ No receipt found within timeout period.")
         return null
     }
+
+    fun waitForReceiptAsync(
+        txHash: String,
+        timeoutMs: Long = 15_000,
+        pollIntervalMs: Long = 1_000
+    ): CompletableFuture<TransactionReceipt?> {
+
+        return CompletableFuture.supplyAsync {
+            val start = System.currentTimeMillis()
+
+            while (System.currentTimeMillis() - start < timeoutMs) {
+                val receiptOpt = web3
+                    .ethGetTransactionReceipt(txHash)
+                    .send()
+                    .transactionReceipt
+
+                if (receiptOpt.isPresent) {
+                    return@supplyAsync receiptOpt.get()
+                }
+
+                Thread.sleep(pollIntervalMs)
+            }
+
+            null
+        }
+    }
+
 
     fun getAllAssets(): List<Address>{
         val getAllAssetsFunction = Function(
@@ -141,7 +178,6 @@ object AssetFactory {
         for (assetAddress in assetAddresses) {
             try {
                 val nameFunc = Function("name", emptyList(), listOf(object : TypeReference<Utf8String>() {}))
-                val symbolFunc = Function("symbol", emptyList(), listOf(object : TypeReference<Utf8String>() {}))
 
                 val nameCall = web3.ethCall(
                     org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
@@ -152,26 +188,13 @@ object AssetFactory {
                     org.web3j.protocol.core.DefaultBlockParameterName.LATEST
                 ).send()
 
-                val symbolCall = web3.ethCall(
-                    org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
-                        txManager.fromAddress,
-                        assetAddress.toString(),
-                        FunctionEncoder.encode(symbolFunc)
-                    ),
-                    org.web3j.protocol.core.DefaultBlockParameterName.LATEST
-                ).send()
-
                 val existingName = FunctionReturnDecoder.decode(nameCall.value, nameFunc.outputParameters)
                     .firstOrNull()?.value as? String ?: continue
 
-                val existingSymbol = FunctionReturnDecoder.decode(symbolCall.value, symbolFunc.outputParameters)
-                    .firstOrNull()?.value as? String ?: continue
-
                 // Normalize names
-                Bukkit.getLogger().info("${normalizeName(existingName)}, ${normalizeName(name)}")
                 if (normalizeName(existingName) == normalizeName(name)) {
-                    println("✅ Found asset: $existingName ($existingSymbol) at ${assetAddress.value}")
-                    saveAsset(existingName, existingSymbol, assetAddress.value)
+                    println("✅ Found asset: $existingName at ${assetAddress.value}")
+                    saveAsset(existingName, assetAddress.value)
                     return true
                 }
 
@@ -185,8 +208,10 @@ object AssetFactory {
     }
 
 
+
     fun createAsset(name: String, symbol: String): String? {
         val upload_name = normalizeName(name)
+        println("creating asset $upload_name")
         val function = Function(
             "createAsset",
             listOf(Utf8String(upload_name), Utf8String(symbol)),
@@ -202,7 +227,7 @@ object AssetFactory {
             BigInteger.ZERO
         ).transactionHash
 
-        println("Transaction sent: $txHash")
+        println("Create asset transaction sent: $txHash")
 
         val receipt = waitForReceipt(txHash)
         if (receipt == null) {
@@ -210,52 +235,107 @@ object AssetFactory {
             return null
         }
 
-        // Ideally decode logs to get asset address, for now simulate or log
-        println("✅ Asset created in tx: $txHash, but address not yet extracted")
+        // Event definition
+        val assetCreatedEvent = org.web3j.abi.datatypes.Event(
+            "AssetCreated",
+            listOf(
+                TypeReference.create(Address::class.java),
+                TypeReference.create(Utf8String::class.java),
+                TypeReference.create(Utf8String::class.java),
+                TypeReference.create(Address::class.java)
+            )
+        )
 
-        // Optional: If decoded address available, save it:
-        // saveAsset(name, symbol, actualAddress)
+        val eventSig = Hash.sha3String("AssetCreated(address,string,string,address)")
 
-        return null
+        val log = receipt.logs.firstOrNull {
+            it.topics.isNotEmpty() && it.topics[0] == eventSig
+        }
+
+        if (log == null) {
+            println("⚠️ AssetCreated event not found in receipt")
+            return null
+        }
+
+        val decoded = FunctionReturnDecoder.decode(
+            log.data,
+            assetCreatedEvent.nonIndexedParameters
+        )
+
+        val assetAddress = (decoded[0].value as String)
+        val createdName  = decoded[1].value as String
+        val symbol       = decoded[2].value as String
+        val owner        = decoded[3].value as String
+
+        saveAsset(createdName, assetAddress)
+
+        println("✅ Asset created: $createdName -> $assetAddress (owner $owner)")
+        return assetAddress
+
     }
 
-    fun mintAsset(assetAddress: String, amount: Number, walletAddress: String): String? {
-        // mint an asset to the user's wallet.
-        val toAddress = walletAddress
+
+    fun mintAsset(
+        assetAddress: String,
+        amount: Number,
+        walletAddress: String
+    ): String? {
+        println(assetAddress)
+        // Hard guard – never attempt to mint to non-address
+        if (!assetAddress.startsWith("0x") || assetAddress.length != 42) {
+            println("❌ Invalid asset address: $assetAddress")
+            return null
+        }
+
+        if (!walletAddress.startsWith("0x") || walletAddress.length != 42) {
+            println("❌ Invalid wallet address: $walletAddress")
+            return null
+        }
+
         val mintFunction = Function(
             "tokenizeItems",
             listOf(
-                Address(toAddress),
-                org.web3j.abi.datatypes.generated.Uint256(BigInteger.valueOf(amount.toLong()))
+                Address(walletAddress),
+                org.web3j.abi.datatypes.generated.Uint256(
+                    BigInteger.valueOf(amount.toLong())
+                )
             ),
             emptyList()
         )
+
         val encodedFunction = FunctionEncoder.encode(mintFunction)
 
         return try {
-            val transactionResponse = txManager.sendTransaction(
+            val tx = txManager.sendTransaction(
                 gasProvider.gasPrice,
-                gasProvider.getGasLimit("mint"),
+                gasProvider.getGasLimit("tokenizeItems"),
                 assetAddress,
                 encodedFunction,
                 BigInteger.ZERO
             )
 
-            println("✅ Mint transaction sent: ${transactionResponse.transactionHash}")
+            val txHash = tx.transactionHash
+            println("✅ Mint transaction sent: $txHash")
 
-            val receipt = waitForReceipt(transactionResponse.transactionHash)
-            if (receipt == null || !receipt.isStatusOK) {
-                println("❌ Mint failed or receipt status not OK for tx: ${transactionResponse.transactionHash}")
+            val receipt = waitForReceipt(txHash)
+            if (receipt == null) {
+                println("❌ No receipt for mint tx: $txHash")
                 return null
             }
 
+            if (!receipt.isStatusOK) {
+                println("❌ Mint reverted: $txHash")
+                return null
+            }
 
-            println("✅ Successfully minted $amount tokens to $toAddress")
-            transactionResponse.transactionHash
+            println("✅ Successfully minted $amount tokens to $walletAddress")
+            txHash
+
         } catch (e: Exception) {
             println("❌ Exception during mint: ${e.message}")
             null
         }
     }
+
 
 }
