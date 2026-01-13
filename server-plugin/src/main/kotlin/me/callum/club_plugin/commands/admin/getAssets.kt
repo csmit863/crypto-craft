@@ -1,18 +1,14 @@
 package me.callum.club_plugin.commands.admin
 
-import me.callum.club_plugin.economy.*
+import me.callum.club_plugin.economy.Uniswap
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.event.ClickEvent
-import net.kyori.adventure.text.event.HoverEvent
 import net.kyori.adventure.text.format.TextColor
-import org.bukkit.Bukkit
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
-import org.bukkit.entity.Player
-import org.web3j.protocol.Web3j
-import org.web3j.tx.RawTransactionManager
+import java.math.BigDecimal
 import java.math.BigInteger
+import java.math.RoundingMode
 
 class GetAssetsCommand : CommandExecutor {
 
@@ -23,47 +19,43 @@ class GetAssetsCommand : CommandExecutor {
         args: Array<out String>
     ): Boolean {
 
-        if (sender is Player && !sender.isOp) {
-            sender.sendMessage("You do not have permission to use this command.")
-            return true
-        }
+        sender.sendMessage(Component.text("Uniswap Pairs and Prices:").color(TextColor.color(0, 255, 255)))
 
-        sender.sendMessage("Uniswap Pairs:")
-
-        // ONE async entry point
         Uniswap.getAllPairs().thenAccept { pairs ->
 
             if (pairs.isEmpty()) {
-                sender.sendMessage("No pairs found.")
+                sender.sendMessage(Component.text("No pairs found.").color(TextColor.color(255, 0, 0)))
                 return@thenAccept
             }
 
             pairs.forEachIndexed { index, pairAddress ->
 
-                // Fetch reserves for each pair
                 Uniswap.getReserves(pairAddress).thenAccept { reserves ->
-                    val reserveA = reserves.first
-                    val reserveB = reserves.second
 
-                    Bukkit.getLogger().info(
-                        "Pair[$index] $pairAddress | A=$reserveA B=$reserveB"
-                    )
+                    val reserve0 = reserves.first
+                    val reserve1 = reserves.second
+
+                    // Avoid dividing by zero
+                    if (reserve1 == BigInteger.ZERO) return@thenAccept
+
+                    val price = BigDecimal(reserve0)
+                        .movePointLeft(18)
+                        .divide(BigDecimal(reserve1).movePointLeft(18), 8, RoundingMode.HALF_UP)
 
                     sender.sendMessage(
-                        "Pair[$index]: $pairAddress"
+                        Component.text("Pair[$index]: $pairAddress").color(TextColor.color(0, 255, 255))
                     )
                     sender.sendMessage(
-                        "  Reserves -> A: $reserveA | B: $reserveB"
+                        Component.text("  Price (reserve0/reserve1): $price").color(TextColor.color(0, 255, 0))
                     )
                 }
             }
         }.exceptionally { ex ->
             ex.printStackTrace()
-            sender.sendMessage("Failed to fetch pairs.")
+            sender.sendMessage(Component.text("Failed to fetch pairs.").color(TextColor.color(255, 0, 0)))
             null
         }
 
         return true
     }
 }
-
