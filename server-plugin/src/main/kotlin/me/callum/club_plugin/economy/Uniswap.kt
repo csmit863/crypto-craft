@@ -394,6 +394,49 @@ object Uniswap: IUniswap {
         }
     }
 
+    fun getAmountsOut(
+        amountIn: BigInteger,
+        path: List<String>
+    ): CompletableFuture<List<BigInteger>> {
+
+        val function = Function(
+            "getAmountsOut",
+            listOf(
+                Uint256(amountIn),
+                org.web3j.abi.datatypes.DynamicArray(
+                    Address::class.java,
+                    path.map { Address(it) }
+                )
+            ),
+            listOf(object : TypeReference<org.web3j.abi.datatypes.DynamicArray<Uint256>>() {})
+        )
+
+        val encodedFunction = FunctionEncoder.encode(function)
+
+        return web3.ethCall(
+            Transaction.createEthCallTransaction(
+                null,
+                v2routerAddress,
+                encodedFunction
+            ),
+            DefaultBlockParameterName.LATEST
+        ).sendAsync().thenApply { response ->
+
+            val decoded = org.web3j.abi.FunctionReturnDecoder.decode(
+                response.value,
+                function.outputParameters
+            )
+
+            if (decoded.isEmpty()) {
+                emptyList()
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                val amounts = decoded[0] as org.web3j.abi.datatypes.DynamicArray<Uint256>
+                amounts.value.map { it.value }
+            }
+        }
+    }
+
 
     fun addLiquidity(
         tokenA: String,
