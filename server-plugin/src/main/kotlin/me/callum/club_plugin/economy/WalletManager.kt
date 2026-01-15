@@ -165,6 +165,12 @@ object WalletManager: Listener {
         return balance
     }
 
+    fun getBalanceWei(playerUUID: UUID): CompletableFuture<BigInteger> {
+        val walletAddress = getWallet(playerUUID) ?: return CompletableFuture.failedFuture(Exception("No wallet found"))
+        val balance = blockcoin.getBalanceWei(walletAddress)
+        return balance
+    }
+
     fun getEthBalance(walletAddress: String): CompletableFuture<BigDecimal> {
         return CompletableFuture.supplyAsync {
             try {
@@ -243,19 +249,45 @@ object WalletManager: Listener {
     fun onPlayerDeath(event: PlayerDeathEvent) {
         val player = event.entity
         val killer = player.killer
+        val adminAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-        val lossAmount = getBalance(player.uniqueId) // * 0.1 // 10% of coins lost
+        getBalanceWei(player.uniqueId).thenAccept { balanceWei ->
+            if (balanceWei <= BigInteger.ZERO) return@thenAccept
 
-        if (killer != null) {
-            // Transfer coins to the killer
-            val killerBalance = getBalance(killer.uniqueId)
-            //setBalance(killer.uniqueId, killerBalance + lossAmount)
-            player.sendMessage("§cYou lost $lossAmount ClubCoins to ${killer.name}!")
-            killer.sendMessage("§aYou stole $lossAmount ClubCoins from ${player.name}!")
-        } else {
-            // Burn coins if death was not PvP
-            //setBalance(player.uniqueId, getBalance(player.uniqueId) - lossAmount)
-            player.sendMessage("§cYou lost $lossAmount ClubCoins (burned).")
+            // 10% using integer math (correct)
+            val lossWei = balanceWei.multiply(BigInteger.TEN).divide(BigInteger.valueOf(100))
+            if (lossWei <= BigInteger.ZERO) return@thenAccept
+
+            // Convert ONCE at the boundary
+            val lossTokens = BigDecimal(lossWei)
+                .divide(BigDecimal.TEN.pow(18))
+                .toDouble()
+
+            if (lossTokens <= 0.0) return@thenAccept
+
+            val recipient = when {
+                killer != null -> getWallet(killer.uniqueId)
+                else -> adminAddress
+            } ?: adminAddress
+
+            sendTokens(player.uniqueId, recipient, lossTokens)
+                .thenAccept { success ->
+                    if (!success) return@thenAccept
+
+                    val display = "%.4f".format(lossTokens)
+
+                    if (killer != null) {
+                        player.sendMessage("§cYou lost $display Blockcoins to ${killer.name}.")
+                        killer.sendMessage("§aYou gained $display Blockcoins from ${player.name}.")
+                    } else {
+                        player.sendMessage("§cYou lost $display Blockcoins.")
+                    }
+                }
+                .exceptionally {
+                    Bukkit.getLogger().severe("Death tax failed: ${it.message}")
+                    null
+                }
         }
     }
+
 }

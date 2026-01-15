@@ -10,18 +10,27 @@ import me.callum.club_plugin.commands.player.BuyItemsCommand
 import me.callum.club_plugin.commands.player.SellItemsCommand
 import me.callum.club_plugin.commands.player.SendTokensCommand
 import me.callum.club_plugin.commands.player.CheckPriceCommand
+import me.callum.club_plugin.commands.player.Expand
+import me.callum.club_plugin.commands.player.LiquidityCommand
 import me.callum.club_plugin.economy.AssetFactory
 import me.callum.club_plugin.economy.Uniswap
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.http.HttpService
 import org.web3j.tx.RawTransactionManager
+import java.io.File
 
 data class DeploymentLog(
     val logs: List<String>,
     val returns: Map<String, Any> = emptyMap(), // new field to match new JSON format
     val success: Boolean
 )
+
+data class WorldBorderState(
+    val base: Int = 200,
+    var expanded: Long = 0
+)
+
 
 
 class CryptoCraft : JavaPlugin() {
@@ -31,7 +40,29 @@ class CryptoCraft : JavaPlugin() {
     private lateinit var assetFactory: AssetFactory
     private lateinit var uniswap: Uniswap
 
+    private lateinit var worldBorderFile: File
+    private lateinit var worldBorderState: WorldBorderState
+    private val gson = Gson()
+
+
     override fun onEnable() {
+
+        // setup worldborder
+        worldBorderFile = File(dataFolder, "worldborder.json")
+        if (!worldBorderFile.exists()) {
+            dataFolder.mkdirs()
+            worldBorderState = WorldBorderState()
+            worldBorderFile.writeText(gson.toJson(worldBorderState))
+            logger.info("Created worldborder.json with default values")
+        } else {
+            worldBorderState = gson.fromJson(
+                worldBorderFile.readText(),
+                WorldBorderState::class.java
+            )
+            logger.info("Loaded worldborder.json")
+        }
+
+        applyWorldBorder()
 
         // centralised management of key variables
         val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
@@ -78,6 +109,17 @@ class CryptoCraft : JavaPlugin() {
             ?: throw IllegalStateException("No deployments found in $resourcePath")
     }
 
+    private fun applyWorldBorder() {
+        val world = server.worlds.first() // or explicitly "world"
+        val radius = worldBorderState.base + worldBorderState.expanded
+        world.worldBorder.size = radius * 2.0
+        logger.info("World border set to radius $radius")
+    }
+
+    fun saveWorldBorder() {
+        worldBorderFile.writeText(gson.toJson(worldBorderState))
+    }
+
 
     private fun registerCommands() {
         // economy commands
@@ -91,6 +133,9 @@ class CryptoCraft : JavaPlugin() {
             tabCompleter = cmd
         }
         getCommand("buy")?.setExecutor(BuyItemsCommand(walletManager))
+        getCommand("liquidity")?.setExecutor(LiquidityCommand())
+        getCommand("expand")?.setExecutor(Expand(this, walletManager))
+
 
         // admin commands
         //getCommand("setTokenAddress")?.setExecutor(SetTokenCommand(blockcoin))

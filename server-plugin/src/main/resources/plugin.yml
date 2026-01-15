@@ -18,6 +18,11 @@ commands:
     description: buy an item with Blockcoins
   price:
     description: check the price of an item
+  liquidity:
+    description: check the liquidity of an item.
+  expand:
+    description: Expand the world border by burning Blockcoins
+    usage: /expand <blocks>
 
   # admin commands
   setTokenAddress:

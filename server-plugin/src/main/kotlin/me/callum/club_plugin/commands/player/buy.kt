@@ -65,56 +65,72 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
             return true
         }
 
-        val price: Int = 1 // will have to implement uniswap quoting
-        val coinPrice: BigDecimal = BigDecimal(price*amount)
-        val balanceFuture: CompletableFuture<BigDecimal> = walletManager.getBalance(sender.uniqueId)
-        // ether balance errors. if the account does not have ether, the transaction will fail: "Transaction failed: Insufficient funds for gas * price + value".
-        // However, the item will still be provided.
-        balanceFuture.thenAccept { balance ->
-            if (balance < coinPrice) {
-                sender.sendMessage(Component.text("You don't have enough coins."))
-            } else {
-                val itemTokenAddress = AssetFactory.getAssetAddress(itemName)
-                if (itemTokenAddress == null) {
-                    sender.sendMessage(Component.text("Failed to find token address for $itemName").color(TextColor.color(255, 0, 0)))
-                    return@thenAccept
-                }
-
-                val paymentTokenAddress = Blockcoin.address
-                val amountIn = coinPrice.toBigInteger()
-                val amountOutMin = BigInteger.ZERO  // could calculate via Uniswap quote
-                val path = listOf(paymentTokenAddress, itemTokenAddress)
-                val recipient = Address(walletManager.getWallet(sender.uniqueId))
-                val deadline = org.web3j.abi.datatypes.generated.Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300))
-
-                val userSigner = Credentials.create(WalletManager.getWalletAuth(sender.uniqueId))
-                val userTxManager = RawTransactionManager(Blockcoin.web3, userSigner)
-
-                CompletableFuture.supplyAsync {
-                    Uniswap.swapExactTokensForTokens(
-                        amountIn,
-                        amountOutMin,
-                        path,
-                        recipient,
-                        deadline,
-                        userTxManager
-                    )
-                }.thenAccept { receipt ->
-                    // Only give items after a successful swap
-                    val itemToAdd = ItemStack(material, amount)
-                    sender.inventory.addItem(itemToAdd)
-                    sender.sendMessage(Component.text(
-                        "Purchased $amount ${material.name.lowercase().replace("_", " ")} with $coinPrice blockcoins."
-                    ).color(TextColor.color(0, 255, 0)))
-                }.exceptionally { throwable ->
-                    sender.sendMessage(Component.text("Swap failed: ${throwable.message}")
-                        .color(TextColor.color(255, 0, 0)))
-                    null
-                }
-
+        val itemTokenAddress = AssetFactory.getAssetAddress(itemName)
+            ?: run {
+                sender.sendMessage(Component.text("Failed to find token address for $itemName")
+                    .color(TextColor.color(255, 0, 0)))
+                return true
             }
-        }
-        return true
 
+        val DECIMALS = BigInteger.TEN.pow(18)
+        val amountOut = BigInteger.valueOf(amount.toLong()).multiply(DECIMALS)
+
+        val path = listOf(Blockcoin.address, itemTokenAddress)
+
+        // --- QUOTE REQUIRED INPUT ---
+        val amountsIn = Uniswap.getAmountsIn(amountOut, path).get()
+        require(amountsIn.isNotEmpty()) { "No quote returned" }
+
+        val requiredIn = amountsIn.first()
+
+        // --- SLIPPAGE (1%) ---
+        val amountInMax = requiredIn
+            .multiply(BigInteger.valueOf(101))
+            .divide(BigInteger.valueOf(100))
+
+        val walletAddress = walletManager.getWallet(sender.uniqueId)
+            ?: run {
+                sender.sendMessage(Component.text("No wallet found")
+                    .color(TextColor.color(255, 0, 0)))
+                return true
+            }
+
+        val userSigner = Credentials.create(WalletManager.getWalletAuth(sender.uniqueId))
+        val userTxManager = RawTransactionManager(Blockcoin.web3, userSigner)
+
+        // --- APPROVE ---
+        Blockcoin.approveSpending(
+            Uniswap.v2routerAddress,
+            amountInMax,
+            userTxManager
+        )
+
+        // --- SWAP ---
+        CompletableFuture.supplyAsync {
+            Uniswap.swapTokensForExactTokens(
+                amountOut,
+                amountInMax,
+                path,
+                Address(walletAddress),
+                org.web3j.abi.datatypes.generated.Uint256(
+                    BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)
+                ),
+                userTxManager
+            )
+        }.thenAccept {
+            sender.inventory.addItem(ItemStack(material, amount))
+            sender.sendMessage(
+                Component.text("✅ Bought $amount ${material.name.lowercase().replace("_", " ")}")
+                    .color(TextColor.color(0, 255, 0))
+            )
+        }.exceptionally { e ->
+            sender.sendMessage(
+                Component.text("❌ Buy failed: ${e.message}")
+                    .color(TextColor.color(255, 0, 0))
+            )
+            null
+        }
+
+        return true
     }
 }
