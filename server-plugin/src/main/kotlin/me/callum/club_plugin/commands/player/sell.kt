@@ -16,6 +16,7 @@ import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.Keys
 import org.web3j.tx.RawTransactionManager
+import java.math.BigDecimal
 import java.math.BigInteger
 
 
@@ -282,6 +283,8 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
             val amountOutMin = expectedOut
                 .multiply(BigInteger.valueOf(99))
                 .divide(BigInteger.valueOf(100))
+            val receivedBlockcoin = BigDecimal(expectedOut)
+                .divide(BigDecimal(ERC20_DECIMALS))
 
             val deadline = Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300))
 
@@ -298,8 +301,9 @@ class SellItemsCommand(private val walletManager: WalletManager) : CommandExecut
 
             // --- SUCCESS ---
             sender.sendMessage(
-                Component.text("✅ Sold $amount $rawMaterialName")
-                    .color(TextColor.color(0, 255, 0))
+                Component.text(
+                    "✅ Sold $amount $rawMaterialName for ${receivedBlockcoin.stripTrailingZeros()} blockcoins"
+                ).color(TextColor.color(0, 255, 0))
             )
 
         } catch (e: Exception) {

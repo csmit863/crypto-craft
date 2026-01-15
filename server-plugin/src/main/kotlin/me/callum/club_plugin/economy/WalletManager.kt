@@ -280,7 +280,7 @@ object WalletManager: Listener {
                         player.sendMessage("§cYou lost $display Blockcoins to ${killer.name}.")
                         killer.sendMessage("§aYou gained $display Blockcoins from ${player.name}.")
                     } else {
-                        player.sendMessage("§cYou lost $display Blockcoins.")
+                        player.sendMessage("§cWhen you died, you lost $display Blockcoins.")
                     }
                 }
                 .exceptionally {

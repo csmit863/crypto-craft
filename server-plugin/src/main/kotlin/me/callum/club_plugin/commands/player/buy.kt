@@ -82,6 +82,8 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
         require(amountsIn.isNotEmpty()) { "No quote returned" }
 
         val requiredIn = amountsIn.first()
+        val spentBlockcoin = BigDecimal(requiredIn)
+            .divide(BigDecimal(DECIMALS))
 
         // --- SLIPPAGE (1%) ---
         val amountInMax = requiredIn
@@ -120,8 +122,10 @@ class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecuto
         }.thenAccept {
             sender.inventory.addItem(ItemStack(material, amount))
             sender.sendMessage(
-                Component.text("✅ Bought $amount ${material.name.lowercase().replace("_", " ")}")
-                    .color(TextColor.color(0, 255, 0))
+                Component.text(
+                    "✅ Bought $amount ${material.name.lowercase().replace("_", " ")} " +
+                            "for ${spentBlockcoin.stripTrailingZeros()} blockcoins"
+                ).color(TextColor.color(0, 255, 0))
             )
         }.exceptionally { e ->
             sender.sendMessage(

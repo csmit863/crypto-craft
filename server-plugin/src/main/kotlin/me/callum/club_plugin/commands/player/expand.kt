@@ -53,22 +53,27 @@ class Expand(
 
         val playerUUID = sender.uniqueId
 
-        // Check balance (exact integer math)
+        // Inside the WalletManager.getBalanceWei callback
         WalletManager.getBalanceWei(playerUUID).thenAccept { balanceWei ->
-            val costWei = BigInteger.valueOf(amount).multiply(BigInteger.TEN.pow(18))
+
+            // Current expanded blocks
+            val currentExpanded = state.expanded.toDouble()
+
+            // Calculate cost progressively: 1 + 0.2 per already expanded block
+            var totalCost = 0.0
+            for (i in 1..amount) {
+                totalCost += 1.0 + 0.2 * (currentExpanded + i - 1)
+            }
+
+            val costWei = BigInteger.valueOf((totalCost * 1e18).toLong())
 
             if (balanceWei < costWei) {
-                sender.sendMessage("§cYou can't afford that.")
+                sender.sendMessage("§cYou can't afford that. Cost: $totalCost BlockCoins")
                 return@thenAccept
             }
 
             // Burn coins
-            WalletManager.sendTokens(
-                playerUUID,
-                adminBurnAddress,
-                amount.toDouble()
-            ).thenAccept { success ->
-
+            WalletManager.sendTokens(playerUUID, adminBurnAddress, totalCost).thenAccept { success ->
                 if (!success) {
                     sender.sendMessage("§cTransaction failed.")
                     return@thenAccept

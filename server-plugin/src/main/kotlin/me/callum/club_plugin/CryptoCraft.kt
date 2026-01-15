@@ -65,7 +65,7 @@ class CryptoCraft : JavaPlugin() {
         applyWorldBorder()
 
         // centralised management of key variables
-        val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+        val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80") // TODO: retrieve from .env or config.json, not hardcode
         val rpcUrl: String = "https://testnet.qutblockchain.club"
         val web3j: Web3j = Web3j.build(HttpService(rpcUrl))
         val adminTxManager = RawTransactionManager(web3j, adminSigner)
