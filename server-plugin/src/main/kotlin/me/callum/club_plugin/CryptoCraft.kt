@@ -12,6 +12,7 @@ import me.callum.club_plugin.commands.player.SendTokensCommand
 import me.callum.club_plugin.commands.player.CheckPriceCommand
 import me.callum.club_plugin.commands.player.Expand
 import me.callum.club_plugin.commands.player.LiquidityCommand
+import me.callum.club_plugin.config.ServerConfig
 import me.callum.club_plugin.economy.AssetFactory
 import me.callum.club_plugin.economy.Uniswap
 import org.web3j.crypto.Credentials
@@ -47,6 +48,7 @@ class CryptoCraft : JavaPlugin() {
 
     override fun onEnable() {
 
+
         // setup worldborder
         worldBorderFile = File(dataFolder, "worldborder.json")
         if (!worldBorderFile.exists()) {
@@ -63,6 +65,19 @@ class CryptoCraft : JavaPlugin() {
         }
 
         applyWorldBorder()
+
+        // set server config folder
+        ServerConfig.init(dataFolder)
+        if (!ServerConfig.isComplete()) {
+            // bootstrap from deployment JSON if config is empty
+            val mainDeployment = loadDeploymentData("/me/callum/club_plugin/assets/deployments.json")
+            val uniswapDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
+            ServerConfig.setRpcUrl("https://testnet.qutblockchain.club")
+            ServerConfig.setBlockcoin(mainDeployment.logs[0])
+            ServerConfig.setAssetFactory(mainDeployment.logs[1])
+            ServerConfig.setUniswapFactory(uniswapDeployment.logs[0])
+            ServerConfig.setUniswapRouter(uniswapDeployment.logs[1])
+        }
 
         // centralised management of key variables
         val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80") // TODO: retrieve from .env or config.json, not hardcode
@@ -126,21 +141,23 @@ class CryptoCraft : JavaPlugin() {
         getCommand("price")?.setExecutor(CheckPriceCommand())
         getCommand("balance")?.setExecutor(Bal(walletManager))
         getCommand("bal")?.setExecutor(Bal(walletManager))
-        getCommand("send")?.setExecutor(SendTokensCommand(walletManager))
+        getCommand("send")?.setExecutor(SendTokensCommand(this@CryptoCraft, walletManager))
         getCommand("sell")?.apply {
-            val cmd = SellItemsCommand(walletManager)
+            val cmd = SellItemsCommand(this@CryptoCraft, walletManager)
             setExecutor(cmd)
             tabCompleter = cmd
         }
-        getCommand("buy")?.setExecutor(BuyItemsCommand(walletManager))
+        getCommand("buy")?.setExecutor(BuyItemsCommand(this@CryptoCraft, walletManager))
         getCommand("liquidity")?.setExecutor(LiquidityCommand())
         getCommand("expand")?.setExecutor(Expand(this, walletManager))
 
 
         // admin commands
-        //getCommand("setTokenAddress")?.setExecutor(SetTokenCommand(blockcoin))
-        //getCommand("setWeb3")?.setExecutor(SetWeb3Command(blockcoin))
-        //getCommand("setFactory")?.setExecutor(SetFactoryCommand(blockcoin))
+        getCommand("setTokenAddress")?.setExecutor(SetBlockcoinCommand())
+        getCommand("setWeb3")?.setExecutor(SetWeb3Command())
+        getCommand("setFactory")?.setExecutor(SetFactoryCommand())
+        getCommand("setRouter")?.setExecutor(SetRouterCommand())
+        getCommand("setAssetFactory")?.setExecutor(SetAssetFactoryCommand())
         getCommand("getConfig")?.setExecutor(GetConfigCommand())
         getCommand("getAssets")?.setExecutor(GetAssetsCommand())
     }

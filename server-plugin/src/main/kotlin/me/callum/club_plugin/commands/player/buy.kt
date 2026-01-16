@@ -13,6 +13,7 @@ import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
+import org.bukkit.plugin.java.JavaPlugin
 import org.web3j.abi.datatypes.Address
 import org.web3j.tx.RawTransactionManager
 import java.math.BigDecimal
@@ -30,110 +31,142 @@ import org.web3j.crypto.Credentials
  * Rule: no one should be able to buy an item unless it has been sold at least once.
  * IE, the token must be created before it can be bought.
  */
+/**
+ * MAIN THREAD
+ * - validate
+ * - resolve material / wallet
+ * - send "processing..."
+ *
+ * ASYNC
+ * - ALL blockchain logic:
+ *   - quote
+ *   - approve
+ *   - swap
+ *
+ * MAIN THREAD
+ * - give item
+ * - send success / failure
+ *
+ */
+class BuyItemsCommand(
+    private val plugin: JavaPlugin,
+    private val walletManager: WalletManager
+) : CommandExecutor {
 
-class BuyItemsCommand(private val walletManager: WalletManager) : CommandExecutor {
+    override fun onCommand(
+        sender: CommandSender,
+        command: Command,
+        label: String,
+        args: Array<out String>
+    ): Boolean {
 
-    override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<out String>): Boolean {
         if (sender !is Player) {
-            sender.sendMessage(Component.text("Only players can buy items!").color(TextColor.color(255, 0, 0)))
+            sender.sendMessage(Component.text("Only players can buy items."))
             return true
         }
 
         if (args.size != 2) {
-            sender.sendMessage(Component.text("Usage: /buy <item> <amount>").color(TextColor.color(255, 0, 0)))
+            sender.sendMessage(Component.text("Usage: /buy <item> <amount>"))
             return true
         }
 
-        val itemName = args[0]
+        val material = Material.matchMaterial(args[0])
         val amount = args[1].toIntOrNull()
 
-        val material = Material.matchMaterial(itemName)
-        Bukkit.getLogger().info(material.toString())
-
-        if (material == null) {
-            sender.sendMessage(Component.text("Unknown item type: $itemName").color(TextColor.color(255, 0, 0)))
+        if (material == null || amount == null || amount <= 0) {
+            sender.sendMessage(Component.text("Invalid item or amount."))
             return true
         }
 
-        if (amount == null || amount <= 0) {
-            sender.sendMessage(Component.text("Invalid amount: must be a positive number.").color(TextColor.color(255, 0, 0)))
-            return true
-        }
+        val itemName = material.key.key
 
         if (!AssetFactory.checkAssetExists(itemName)) {
-            sender.sendMessage(Component.text("The asset $itemName does not exist on the market yet!").color(TextColor.color(255, 0, 0)))
+            sender.sendMessage(Component.text("This item is not available on the market yet."))
             return true
         }
-
-        val itemTokenAddress = AssetFactory.getAssetAddress(itemName)
-            ?: run {
-                sender.sendMessage(Component.text("Failed to find token address for $itemName")
-                    .color(TextColor.color(255, 0, 0)))
-                return true
-            }
-
-        val DECIMALS = BigInteger.TEN.pow(18)
-        val amountOut = BigInteger.valueOf(amount.toLong()).multiply(DECIMALS)
-
-        val path = listOf(Blockcoin.address, itemTokenAddress)
-
-        // --- QUOTE REQUIRED INPUT ---
-        val amountsIn = Uniswap.getAmountsIn(amountOut, path).get()
-        require(amountsIn.isNotEmpty()) { "No quote returned" }
-
-        val requiredIn = amountsIn.first()
-        val spentBlockcoin = BigDecimal(requiredIn)
-            .divide(BigDecimal(DECIMALS))
-
-        // --- SLIPPAGE (1%) ---
-        val amountInMax = requiredIn
-            .multiply(BigInteger.valueOf(101))
-            .divide(BigInteger.valueOf(100))
 
         val walletAddress = walletManager.getWallet(sender.uniqueId)
             ?: run {
-                sender.sendMessage(Component.text("No wallet found")
-                    .color(TextColor.color(255, 0, 0)))
+                sender.sendMessage(Component.text("No wallet found."))
                 return true
             }
 
-        val userSigner = Credentials.create(WalletManager.getWalletAuth(sender.uniqueId))
-        val userTxManager = RawTransactionManager(Blockcoin.web3, userSigner)
+        sender.sendMessage(Component.text("⏳ Processing purchase..."))
 
-        // --- APPROVE ---
-        Blockcoin.approveSpending(
-            Uniswap.v2routerAddress,
-            amountInMax,
-            userTxManager
-        )
+        // ---- ASYNC BLOCKCHAIN WORK
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
+            try {
+                val DECIMALS = BigInteger.TEN.pow(18)
+                val amountOut = BigInteger.valueOf(amount.toLong()).multiply(DECIMALS)
 
-        // --- SWAP ---
-        CompletableFuture.supplyAsync {
-            Uniswap.swapTokensForExactTokens(
-                amountOut,
-                amountInMax,
-                path,
-                Address(walletAddress),
-                org.web3j.abi.datatypes.generated.Uint256(
-                    BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)
-                ),
-                userTxManager
-            )
-        }.thenAccept {
-            sender.inventory.addItem(ItemStack(material, amount))
-            sender.sendMessage(
-                Component.text(
-                    "✅ Bought $amount ${material.name.lowercase().replace("_", " ")} " +
-                            "for ${spentBlockcoin.stripTrailingZeros()} blockcoins"
-                ).color(TextColor.color(0, 255, 0))
-            )
-        }.exceptionally { e ->
-            sender.sendMessage(
-                Component.text("❌ Buy failed: ${e.message}")
-                    .color(TextColor.color(255, 0, 0))
-            )
-            null
-        }
+                val tokenAddress = AssetFactory.getAssetAddress(itemName)
+                    ?: error("Token address missing")
+
+                val path = listOf(Blockcoin.address, tokenAddress)
+
+                // ---- QUOTE
+                val amountsIn = Uniswap.getAmountsIn(amountOut, path).get()
+                require(amountsIn.isNotEmpty()) { "No quote returned" }
+
+                val requiredIn = amountsIn.first()
+                val amountInMax = requiredIn
+                    .multiply(BigInteger.valueOf(101))
+                    .divide(BigInteger.valueOf(100))
+
+                val spentBlockcoin = BigDecimal(requiredIn)
+                    .divide(BigDecimal(DECIMALS))
+
+                // ---- SIGNER
+                val creds = Credentials.create(
+                    WalletManager.getWalletAuth(sender.uniqueId)
+                )
+                val txManager = RawTransactionManager(Blockcoin.web3, creds)
+
+                // ---- APPROVE
+                Blockcoin.approveSpending(
+                    Uniswap.v2routerAddress,
+                    amountInMax,
+                    txManager
+                )
+
+                // ---- SWAP
+                val receipt = Uniswap.swapTokensForExactTokens(
+                    amountOut,
+                    amountInMax,
+                    path,
+                    Address(walletAddress),
+                    org.web3j.abi.datatypes.generated.Uint256(
+                        BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)
+                    ),
+                    txManager
+                )
+
+                require(receipt.status == "0x1") { "Swap failed" }
+
+                // ---- SUCCESS → MAIN THREAD
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    if (!sender.isOnline) return@Runnable
+
+                    sender.inventory.addItem(ItemStack(material, amount))
+                    sender.sendMessage(
+                        Component.text(
+                            "✅ Bought $amount ${material.name.lowercase().replace("_", " ")} " +
+                                    "for ${spentBlockcoin.stripTrailingZeros()} blockcoins"
+                        ).color(TextColor.color(0, 255, 0))
+                    )
+                })
+
+            } catch (e: Exception) {
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    if (sender.isOnline) {
+                        sender.sendMessage(
+                            Component.text("❌ Buy failed: ${e.message}")
+                                .color(TextColor.color(255, 0, 0))
+                        )
+                    }
+                })
+            }
+        })
 
         return true
     }

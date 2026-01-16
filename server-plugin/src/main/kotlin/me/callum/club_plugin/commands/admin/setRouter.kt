@@ -5,7 +5,7 @@ import me.callum.club_plugin.config.ServerConfig
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
 
-class SetWeb3Command : AdminCommand() {
+class SetRouterCommand : AdminCommand() {
 
     override fun onCommand(
         sender: CommandSender,
@@ -16,14 +16,14 @@ class SetWeb3Command : AdminCommand() {
 
         if (!ensureOp(sender)) return true
 
-        if (args.size != 1 || !args[0].startsWith("http")) {
-            sender.sendMessage("Usage: /setweb3 <rpc-url>")
+        if (args.size != 1 || !isEthAddress(args[0])) {
+            sender.sendMessage("Usage: /setrouter <0x...address>")
             return true
         }
 
-        ServerConfig.setRpcUrl(args[0])
+        ServerConfig.setUniswapRouter(args[0])
 
-        sender.sendMessage("RPC URL updated.")
+        sender.sendMessage("Uniswap router address updated.")
         return true
     }
 }

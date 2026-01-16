@@ -1,14 +1,14 @@
 [
   {
     "logs": [
-      "0xC35EBbbFeB1c7C17295Ba6EB08F59cC1e54d2c7d",
-      "0x2557627d61F85E5629b23B48d7226D0a9368D507"
+      "0x16F5160f82E3E55ccef997eB23C9d469fE9C70ae",
+      "0x60D27E7F5c7c1E161F5DE52A7A5a76CbC287AA2E"
     ],
     "returns": {},
     "success": true,
     "raw_logs": [
       {
-        "address": "0xc35ebbbfeb1c7c17295ba6eb08f59cc1e54d2c7d",
+        "address": "0x16f5160f82e3e55ccef997eb23c9d469fe9c70ae",
         "topics": [
           "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
           "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -17,7 +17,7 @@
         "data": "0x"
       },
       {
-        "address": "0xc35ebbbfeb1c7c17295ba6eb08f59cc1e54d2c7d",
+        "address": "0x16f5160f82e3e55ccef997eb23c9d469fe9c70ae",
         "topics": [
           "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
           "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -30,10 +30,10 @@
         "topics": [
           "0x41304facd9323d75b11bcdd609cb38effffdb05710f7caf0e9b16c6d9d709f50"
         ],
-        "data": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a30784333354542626246654231633743313732393542613645423038463539634331653534643263376400000000000000000000000000000000000000000000"
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a30783136463531363066383245334535356363656639393765423233433964343639664539433730616500000000000000000000000000000000000000000000"
       },
       {
-        "address": "0x2557627d61f85e5629b23b48d7226d0a9368d507",
+        "address": "0x60d27e7f5c7c1e161f5de52a7a5a76cbc287aa2e",
         "topics": [
           "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
           "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -46,7 +46,7 @@
         "topics": [
           "0x41304facd9323d75b11bcdd609cb38effffdb05710f7caf0e9b16c6d9d709f50"
         ],
-        "data": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a30783235353736323764363146383545353632396232334234386437323236443061393336384435303700000000000000000000000000000000000000000000"
+        "data": "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002a30783630443237453746356337633145313631463544453532413741356137364362433238374141324500000000000000000000000000000000000000000000"
       }
     ],
     "traces": [
@@ -191,7 +191,7 @@
                 "depth": 1,
                 "success": true,
                 "caller": "0x5b73c5498c1e3b4dba84de0f1833c4a029d90519",
-                "address": "0xc35ebbbfeb1c7c17295ba6eb08f59cc1e54d2c7d",
+                "address": "0x16f5160f82e3e55ccef997eb23c9d469fe9c70ae",
                 "maybe_precompile": false,
                 "selfdestruct_address": null,
                 "selfdestruct_refund_target": null,
@@ -290,7 +290,7 @@
                 "selfdestruct_transferred_value": null,
                 "kind": "STATICCALL",
                 "value": "0x0",
-                "data": "0x2c2ecbc2000000000000000000000000c35ebbbfeb1c7c17295ba6eb08f59cc1e54d2c7d",
+                "data": "0x2c2ecbc200000000000000000000000016f5160f82e3e55ccef997eb23c9d469fe9c70ae",
                 "output": "0x",
                 "gas_used": 0,
                 "gas_limit": 1055967349,
@@ -302,7 +302,7 @@
                   "call_data": {
                     "signature": "log(address)",
                     "args": [
-                      "BlockCoin: [0xC35EBbbFeB1c7C17295Ba6EB08F59cC1e54d2c7d]"
+                      "BlockCoin: [0x16F5160f82E3E55ccef997eB23C9d469fE9C70ae]"
                     ]
                   }
                 }
@@ -318,7 +318,7 @@
                 "depth": 1,
                 "success": true,
                 "caller": "0x5b73c5498c1e3b4dba84de0f1833c4a029d90519",
-                "address": "0x2557627d61f85e5629b23b48d7226d0a9368d507",
+                "address": "0x60d27e7f5c7c1e161f5de52a7a5a76cbc287aa2e",
                 "maybe_precompile": false,
                 "selfdestruct_address": null,
                 "selfdestruct_refund_target": null,
@@ -385,7 +385,7 @@
                 "selfdestruct_transferred_value": null,
                 "kind": "STATICCALL",
                 "value": "0x0",
-                "data": "0x2c2ecbc20000000000000000000000002557627d61f85e5629b23b48d7226d0a9368d507",
+                "data": "0x2c2ecbc200000000000000000000000060d27e7f5c7c1e161f5de52a7a5a76cbc287aa2e",
                 "output": "0x",
                 "gas_used": 0,
                 "gas_limit": 1054165639,
@@ -397,7 +397,7 @@
                   "call_data": {
                     "signature": "log(address)",
                     "args": [
-                      "AssetFactory: [0x2557627d61F85E5629b23B48d7226D0a9368D507]"
+                      "AssetFactory: [0x60D27E7F5c7c1E161F5DE52A7A5a76CbC287AA2E]"
                     ]
                   }
                 }
@@ -457,18 +457,18 @@
   {
     "chain": 452,
     "status": "success",
-    "tx_hash": "0x90270b6cf294750f51cf81a644dfe8492d0c3c251a9554f078996060181f1dc1",
-    "contract_address": "0x2557627d61F85E5629b23B48d7226D0a9368D507",
-    "block_number": 1497,
+    "tx_hash": "0xdcfecb50ea5d7fae2d46d5b401792e72afc80338b07710c145ea604c912c8c22",
+    "contract_address": "0x60D27E7F5c7c1E161F5DE52A7A5a76CbC287AA2E",
+    "block_number": 2081,
     "gas_used": 1990905,
     "gas_price": 4100000000
   },
   {
     "chain": 452,
     "status": "success",
-    "tx_hash": "0x63c72b0a04b00fab2570bedc8e257d14a45dd471ad08a78f62ce1559854fffad",
-    "contract_address": "0xC35EBbbFeB1c7C17295Ba6EB08F59cC1e54d2c7d",
-    "block_number": 1496,
+    "tx_hash": "0xe24cb7a652e87e283e735c5e5f1991584ef857cb77d425255b849159ebbf39d9",
+    "contract_address": "0x16F5160f82E3E55ccef997eB23C9d469fE9C70ae",
+    "block_number": 2080,
     "gas_used": 1102442,
     "gas_price": 4100000000
   },

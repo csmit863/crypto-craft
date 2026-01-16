@@ -25,13 +25,17 @@ commands:
     usage: /expand <blocks>
 
   # admin commands
-  setTokenAddress:
+  setBlockcoinAddress:
     description: (OPERATOR ONLY) set the token address for the server currency
 
   setWeb3:
     description: (OPERATOR ONLY) set the RPC url for the server's Web3 connection
 
   setFactory:
+    description: (OPERATOR ONLY) set the address of the uniswap factory contract
+  setRouter:
+    description: (OPERATOR ONLY) set the address of the uniswap router contract
+  setAssetFactory:
     description: (OPERATOR ONLY) set the address of the asset factory contract
 
   getConfig:

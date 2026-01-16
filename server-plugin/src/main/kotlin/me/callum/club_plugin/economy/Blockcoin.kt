@@ -45,6 +45,14 @@ object Blockcoin {
     }
     val address: String
         get() = blockcoinAddress
+
+    fun updateAddress(newAddress: String) {
+        require(newAddress.startsWith("0x") && newAddress.length == 42) {
+            "Invalid Blockcoin address: $newAddress"
+        }
+        blockcoinAddress = newAddress
+        println("✅ Blockcoin address updated to $blockcoinAddress")
+    }
     /**
      * Retrieves the ERC-20 token balance for a given Ethereum address.
      * @param walletAddress The address to check the balance of.

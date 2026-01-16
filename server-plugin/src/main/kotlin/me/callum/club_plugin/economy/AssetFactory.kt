@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture
 // - 2 functions to return the token address of an item and vice versa
 
 object AssetFactory {
-    private lateinit var factoryAddress: String
+    public lateinit var factoryAddress: String
     private lateinit var web3: Web3j
     public lateinit var txManager: RawTransactionManager
 
@@ -39,6 +39,14 @@ object AssetFactory {
     private val gson = Gson()
     private val assetFile = File("plugins/ClubPlugin/assets.json")
     private val assets: MutableMap<String, String> = mutableMapOf()
+
+    fun updateFactoryAddress(newAddress: String) {
+        if (!newAddress.startsWith("0x") || newAddress.length != 42) {
+            throw IllegalArgumentException("Invalid factory address: $newAddress")
+        }
+        factoryAddress = newAddress
+        println("✅ AssetFactory address updated to $factoryAddress")
+    }
 
     fun initialize(factoryAddress: String, web3: Web3j, txManager: RawTransactionManager): AssetFactory {
         if (!this::factoryAddress.isInitialized) {
