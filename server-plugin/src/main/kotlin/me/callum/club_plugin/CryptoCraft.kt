@@ -153,7 +153,7 @@ class CryptoCraft : JavaPlugin() {
 
 
         // admin commands
-        getCommand("setTokenAddress")?.setExecutor(SetBlockcoinCommand())
+        getCommand("setBlockcoinAddress")?.setExecutor(SetBlockcoinCommand())
         getCommand("setWeb3")?.setExecutor(SetWeb3Command())
         getCommand("setFactory")?.setExecutor(SetFactoryCommand())
         getCommand("setRouter")?.setExecutor(SetRouterCommand())
