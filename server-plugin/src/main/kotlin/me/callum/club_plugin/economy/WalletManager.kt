@@ -243,6 +243,14 @@ object WalletManager: Listener {
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
         createWallet(player.uniqueId)
+        player.sendMessage("=== CryptoCraft Help ===")
+        player.sendMessage("/price - Check the current price")
+        player.sendMessage("/balance - Check your balance")
+        player.sendMessage("/buy - Buy an item")
+        player.sendMessage("/sell - Sell an item")
+        player.sendMessage("/send - Send blockcoins to another player")
+        player.sendMessage("/liquidity - Manage liquidity")
+        player.sendMessage("/expand - Expand the world border")
     }
 
     @EventHandler
