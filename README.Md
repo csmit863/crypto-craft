@@ -71,25 +71,25 @@ When users login to the game, they can view their Blockcoin balance by typing /b
 ![mc1](pics/balcommand.png)
 
 If they have Blockcoins, they can send them to other players by typing
-/send <player name> <block coin amount>. This will trigger a blockchain transaction to transfer coins from one account to the other. 
+/send (player name) (block coin amount). This will trigger a blockchain transaction to transfer coins from one account to the other. 
 ![mc2](pics/sendcommand.png)
 
-Since all items are V2 pairs on Uniswap (paired with Blockcoin) players can check the price of an item (once it has been initially sold) using /price <item>
+Since all items are V2 pairs on Uniswap (paired with Blockcoin) players can check the price of an item (once it has been initially sold) using /price (item)
 ![price](pics/pricecommand.png)
 
-Items can be sold with the /sell <item> command. This executes a swap between an <item>/blockcoin Uniswap pair, providing the player with blockcoins to buy other items, or to expand the world border.
+Items can be sold with the /sell (item) command. This executes a swap between an item/blockcoin Uniswap pair, providing the player with blockcoins to buy other items, or to expand the world border.
 ![sell](pics/sellcommand.png)
 
-A world border has been set to introduce scarcity to the item economy, however the world border can be expanded by any player using the /expand <blocks> command. As the world border increases by one block, each subsequent block of expansion becomes more expensive.
+A world border has been set to introduce scarcity to the item economy, however the world border can be expanded by any player using the /expand (blocks) command. As the world border increases by one block, each subsequent block of expansion becomes more expensive.
 ![expand](pics/expandcommand.png)
 
 Pools have an initial liquidity injection of 1 item / 1000 blockcoins, to introduce blockcoins into circulation and to set the initial price. This gives players an incentive to be the first to find an item, be it dandelions, dirt, or diamonds. The initial price discovery phase is chaotic as there is very low liquidity. Until more liquidity is added by external liquidity providers, there may continue to be price instability. Alternatively, players sell items into the pool to increase the liquidity of an item, which brings the price down (often less than 1 blockcoin) but stabilises prices nevertheless. They can also amass a large amount of blockcoin by being the first to sell an item. 
 ![buysell](pics/buysellliq.png)
 
-To check the liquidity of a item/blockcoin pair, the /liquidity <item> command can be used. This can inform players before they buy/sell items, as low liquidity can mean high slippage and unexpected prices. 
+To check the liquidity of a item/blockcoin pair, the /liquidity (item) command can be used. This can inform players before they buy/sell items, as low liquidity can mean high slippage and unexpected prices. 
 ![liq](pics/liquiditycommand.png)
 
-Admins can retrieve the smart contract configuration using the /getconfig command. This returns the smart contract addresses in use. The smart contract addresses can also be changed by the operator with /set<config> command.
+Admins can retrieve the smart contract configuration using the /getconfig command. This returns the smart contract addresses in use. The smart contract addresses can also be changed by the operator with /set(config) command.
 ![config](pics/serverconfigcommand.png)
 
 
