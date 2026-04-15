@@ -80,11 +80,6 @@ class BuyItemsCommand(
 
         val itemName = material.key.key
 
-        if (!AssetFactory.checkAssetExists(itemName)) {
-            sender.sendMessage(Component.text("This item is not available on the market yet."))
-            return true
-        }
-
         val walletAddress = walletManager.getWallet(sender.uniqueId)
             ?: run {
                 sender.sendMessage(Component.text("No wallet found."))
@@ -96,6 +91,14 @@ class BuyItemsCommand(
         // ---- ASYNC BLOCKCHAIN WORK
         Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
             try {
+
+                if (!AssetFactory.checkAssetExists(itemName)) {
+                    Bukkit.getScheduler().runTask(plugin, Runnable {
+                        sender.sendMessage(Component.text("This item is not available on the market yet."))
+                    })
+                    return@Runnable
+                }
+
                 val DECIMALS = BigInteger.TEN.pow(18)
                 val amountOut = BigInteger.valueOf(amount.toLong()).multiply(DECIMALS)
 

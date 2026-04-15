@@ -138,7 +138,7 @@ class CryptoCraft : JavaPlugin() {
 
     private fun registerCommands() {
         // economy commands
-        getCommand("price")?.setExecutor(CheckPriceCommand())
+        getCommand("price")?.setExecutor(CheckPriceCommand(this@CryptoCraft))
         getCommand("balance")?.setExecutor(Bal(walletManager))
         getCommand("bal")?.setExecutor(Bal(walletManager))
         getCommand("send")?.setExecutor(SendTokensCommand(this@CryptoCraft, walletManager))
