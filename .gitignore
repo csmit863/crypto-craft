@@ -1,1 +1,4 @@
 .env
+adminConfiguration.json
+**/adminConfiguration.json
+docker-minecraft-server/plugins/ClubPlugin/adminConfiguration.json

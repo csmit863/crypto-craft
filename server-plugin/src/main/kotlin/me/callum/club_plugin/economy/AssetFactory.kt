@@ -21,7 +21,7 @@ import java.io.FileReader
 import java.io.FileWriter
 import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
-
+import org.web3j.abi.datatypes.Type
 
 // a singleton to interact with the AssetFactory contract
 
@@ -37,7 +37,7 @@ object AssetFactory {
 
     private val gasProvider = DefaultGasProvider()
     private val gson = Gson()
-    private val assetFile = File("plugins/ClubPlugin/assets.json")
+    private val assetFile = File("plugins/crypto-craft/assets.json")
     private val assets: MutableMap<String, String> = mutableMapOf()
 
     fun updateFactoryAddress(newAddress: String) {
@@ -49,17 +49,15 @@ object AssetFactory {
     }
 
     fun initialize(factoryAddress: String, web3: Web3j, txManager: RawTransactionManager): AssetFactory {
-        if (!this::factoryAddress.isInitialized) {
-            this.factoryAddress = factoryAddress
-            this.web3 = web3
-            this.txManager = txManager
+        this.factoryAddress = factoryAddress
+        this.web3 = web3
+        this.txManager = txManager
 
-            if (!assetFile.exists()) {
-                assetFile.parentFile.mkdirs()
-                saveAssets()
-            } else {
-                loadAssets()
-            }
+        if (!assetFile.exists()) {
+            assetFile.parentFile.mkdirs()
+            saveAssets()
+        } else {
+            loadAssets()
         }
         return this
     }
@@ -98,11 +96,7 @@ object AssetFactory {
     }
 
 
-    fun getAssetAddress(name: String): String? {
-        val normalized = normalizeName(name)
-        println("Getting asset address for $normalized")
-        return assets[normalized]
-    }
+
 
     fun waitForReceipt(txHash: String, timeoutMs: Long = 15000): org.web3j.protocol.core.methods.response.TransactionReceipt? {
         val start = System.currentTimeMillis()
@@ -151,6 +145,8 @@ object AssetFactory {
 
 
     fun getAllAssets(): List<Address>{
+        println("getting all assets")
+        // use AssetFactory.sol "getAllAssets" function, returns array of addresses (ERC20 token addresses)
         val getAllAssetsFunction = Function(
             "getAllAssets",
             emptyList(),
@@ -167,6 +163,9 @@ object AssetFactory {
             org.web3j.protocol.core.DefaultBlockParameterName.LATEST
         ).send()
 
+        println("getAllAssets response: ${response.value}")
+        println("getAllAssets error: ${response.error?.message}")
+
         val decoded = FunctionReturnDecoder.decode(
             response.value,
             getAllAssetsFunction.outputParameters
@@ -181,10 +180,29 @@ object AssetFactory {
         return name?.lowercase()?.replace("[_\\s]+".toRegex(), "")?.trim() ?: ""
     }
 
+
+
+    fun getAssetAddress(name: String): String? {
+        val normalized = normalizeName(name)
+        println("Getting asset address for $normalized")
+        return assets[normalized]
+    }
+
     fun checkAssetExists(name: String): Boolean {
+        println(assets[normalizeName(name)]);
+        return assets[normalizeName(name)] != null
+    }
+    fun checkAssetExistsold(name: String): Boolean {
+        println("running check asset exists")
+        // uses getAllAssets to get all token addresses, gets name from each token contract and compare to existing assets.json
         val assetAddresses = getAllAssets()
 
         for (assetAddress in assetAddresses) {
+            // this should NOT be written like this. network call for each asset? wtf
+            // say it takes 30ms to retrieve the name from a contract to compare.
+            // 30 * n assets, lets say 300. 30*300 = 9000 ms. 9 seconds of delay, this is unacceptable
+            // asset search should not require ANY networking. a mapping of coin addresses and coin names should be kept in the JSON file.
+
             try {
                 val nameFunc = Function("name", emptyList(), listOf(object : TypeReference<Utf8String>() {}))
 
@@ -255,10 +273,11 @@ object AssetFactory {
             )
         )
 
-        val eventSig = Hash.sha3String("AssetCreated(address,string,string,address)")
+        val eventSig = "0x" + Hash.sha3String("AssetCreated(address,string,string,address)")
+            .removePrefix("0x")
 
         val log = receipt.logs.firstOrNull {
-            it.topics.isNotEmpty() && it.topics[0] == eventSig
+            it.topics.isNotEmpty() && it.topics[0].lowercase() == eventSig.lowercase()
         }
 
         if (log == null) {
@@ -266,19 +285,24 @@ object AssetFactory {
             return null
         }
 
+        // All 4 params are non-indexed, so everything is in log.data
         val decoded = FunctionReturnDecoder.decode(
             log.data,
-            assetCreatedEvent.nonIndexedParameters
+            listOf(
+                object : TypeReference<Address>() {} as TypeReference<Type<*>>,
+                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>,
+                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>,
+                object : TypeReference<Address>() {} as TypeReference<Type<*>>
+            )
         )
 
-        val assetAddress = (decoded[0].value as String)
-        val createdName  = decoded[1].value as String
-        val symbol       = decoded[2].value as String
-        val owner        = decoded[3].value as String
+        val assetAddress = (decoded[0] as Address).value
+        val createdName  = (decoded[1] as Utf8String).value
+        val createdSymbol = (decoded[2] as Utf8String).value
+        val owner        = (decoded[3] as Address).value
 
         saveAsset(createdName, assetAddress)
-
-        println("✅ Asset created: $createdName -> $assetAddress (owner $owner)")
+        println("✅ Asset created: $createdName -> $assetAddress (owner: $owner)")
         return assetAddress
 
     }
@@ -341,6 +365,45 @@ object AssetFactory {
         } catch (e: Exception) {
             println("❌ Exception during mint: ${e.message}")
             null
+        }
+    }
+
+    fun syncFromChain() {
+        println("🔄 Syncing assets from chain...")
+        try {
+            val addresses = getAllAssets()
+            if (addresses.isEmpty()) {
+                println("ℹ️ No assets found on chain.")
+                return
+            }
+            for (addr in addresses) {
+                try {
+                    val nameFunc = Function(
+                        "name",
+                        emptyList(),
+                        listOf(object : TypeReference<Utf8String>() {})
+                    )
+                    val response = web3.ethCall(
+                        org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
+                            "0x0000000000000000000000000000000000000000",
+                            addr.value,
+                            FunctionEncoder.encode(nameFunc)
+                        ),
+                        org.web3j.protocol.core.DefaultBlockParameterName.LATEST
+                    ).send()
+
+                    val name = FunctionReturnDecoder.decode(response.value, nameFunc.outputParameters)
+                        .firstOrNull()?.value as? String ?: continue
+
+                    saveAsset(name, addr.value)
+                    println("✅ Synced: $name -> ${addr.value}")
+                } catch (e: Exception) {
+                    println("⚠️ Failed to sync asset at ${addr.value}: ${e.message}")
+                }
+            }
+            println("✅ Asset sync complete. ${assets.size} assets loaded.")
+        } catch (e: Exception) {
+            println("❌ Asset sync failed: ${e.message}")
         }
     }
 

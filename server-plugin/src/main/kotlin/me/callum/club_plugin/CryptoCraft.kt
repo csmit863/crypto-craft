@@ -32,7 +32,10 @@ data class WorldBorderState(
     var expanded: Long = 0
 )
 
-
+data class AdminConfig(
+    val rpcUrl: String,
+    val privateKey: String
+)
 
 class CryptoCraft : JavaPlugin() {
 
@@ -47,7 +50,6 @@ class CryptoCraft : JavaPlugin() {
 
 
     override fun onEnable() {
-
 
         // setup worldborder
         worldBorderFile = File(dataFolder, "worldborder.json")
@@ -66,28 +68,34 @@ class CryptoCraft : JavaPlugin() {
 
         applyWorldBorder()
 
-        // set server config folder
-        ServerConfig.init(dataFolder)
-        if (!ServerConfig.isComplete()) {
-            // bootstrap from deployment JSON if config is empty
-            val mainDeployment = loadDeploymentData("/me/callum/club_plugin/assets/deployments.json")
-            val uniswapDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
-            ServerConfig.setRpcUrl("https://testnet.qutblockchain.club")
-            ServerConfig.setBlockcoin(mainDeployment.logs[0])
-            ServerConfig.setAssetFactory(mainDeployment.logs[1])
-            ServerConfig.setUniswapFactory(uniswapDeployment.logs[0])
-            ServerConfig.setUniswapRouter(uniswapDeployment.logs[1])
+        // load admin configuration
+        val adminConfigFile = File(dataFolder, "adminConfiguration.json")
+        if (!adminConfigFile.exists()) {
+            logger.severe("adminConfiguration.json not found in ${dataFolder.path} — cannot start plugin.")
+            server.pluginManager.disablePlugin(this)
+            return
         }
+        val adminConfig = gson.fromJson(adminConfigFile.readText(), AdminConfig::class.java)
+        logger.info("Loaded adminConfiguration.json (rpcUrl: ${adminConfig.rpcUrl})")
 
-        // centralised management of key variables
-        val adminSigner = Credentials.create("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80") // TODO: retrieve from .env or config.json, not hardcode
-        val rpcUrl: String = "https://testnet.qutblockchain.club"
-        val web3j: Web3j = Web3j.build(HttpService(rpcUrl))
-        val adminTxManager = RawTransactionManager(web3j, adminSigner)
-
-        // ✅ Load contract deployment logs
+        // load deployment data once
         val mainDeployment = loadDeploymentData("/me/callum/club_plugin/assets/deployments.json")
         val uniswapDeployment = loadDeploymentData("/me/callum/club_plugin/assets/uniswap_deployments.json")
+
+        // set server config
+        ServerConfig.init(dataFolder)
+
+        ServerConfig.setRpcUrl(adminConfig.rpcUrl)
+        ServerConfig.setBlockcoin(mainDeployment.logs[0])
+        ServerConfig.setAssetFactory(mainDeployment.logs[1])
+        ServerConfig.setUniswapFactory(uniswapDeployment.logs[0])
+        ServerConfig.setUniswapRouter(uniswapDeployment.logs[1])
+
+
+        // initialise web3 from admin config
+        val adminSigner = Credentials.create(adminConfig.privateKey)
+        val web3j: Web3j = Web3j.build(HttpService(adminConfig.rpcUrl))
+        val adminTxManager = RawTransactionManager(web3j, adminSigner)
 
         val blockCoinAddress = mainDeployment.logs.getOrNull(0)
             ?: throw IllegalStateException("Missing BlockCoin address")
@@ -98,11 +106,16 @@ class CryptoCraft : JavaPlugin() {
         val uniswapRouterAddress = uniswapDeployment.logs.getOrNull(1)
             ?: throw IllegalStateException("Missing Uniswap Router address")
 
-        // TO IMPLEMENT:
         assetFactory = AssetFactory.initialize(assetFactoryAddress, web3j, adminTxManager)
         blockcoin = Blockcoin.initialize(blockCoinAddress, web3j, adminTxManager)
         walletManager = WalletManager.initialize(blockcoin, web3j, adminTxManager)
         uniswap = Uniswap.initialize(uniswapFactoryAddress, uniswapRouterAddress, web3j, adminTxManager)
+
+        // sync assets from chain in background
+
+        logger.info("Syncing assets from chain...")
+        AssetFactory.syncFromChain()
+        logger.info("Sync complete, registering commands...")
 
         logger.info("BlockCoin at $blockCoinAddress, AssetFactory at $assetFactoryAddress")
         logger.info("Uniswap Factory at $uniswapFactoryAddress, Router at $uniswapRouterAddress")

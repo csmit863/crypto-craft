@@ -2,6 +2,7 @@ services:
   mc:
     image: itzg/minecraft-server:stable
     environment:
+      VERSION: "1.21.1"
       INIT_MEMORYY: 1G
       MAX_MEMORY: 2G
       EULA: "true"
@@ -21,5 +22,4 @@ services:
     restart: unless-stopped
 volumes:
   data: {}
-  plugins: {}
 

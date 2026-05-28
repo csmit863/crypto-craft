@@ -105,22 +105,37 @@ class SellItemsCommand(
         walletAddress: String
     ): BigDecimal {
         // EVERYTHING here runs async
+        println("doing performsellblockchain")
 
         val name = material.key.key.replace("_", " ")
             .lowercase().replaceFirstChar { it.uppercase() }
         val symbol = material.name.take(4).uppercase()
         val ERC20_DECIMALS = BigInteger.TEN.pow(18)
 
+        println(name+symbol+"ERC20 info");
+
         // asset / pair creation
-        if (!AssetFactory.checkAssetExists(name)) {
-            AssetFactory.createAsset(name, symbol)
-            val newAddress = AssetFactory.getAssetAddress(name)
-                ?: error("Asset creation failed")
+        val assetExists = AssetFactory.checkAssetExists(name)
+        val existingAddress = if (assetExists) AssetFactory.getAssetAddress(name) else null
+        val pairAddress = if (existingAddress != null) {
+            Uniswap.getPair(Blockcoin.address, existingAddress).get()
+        } else null
+        val pairExists = pairAddress != null &&
+                pairAddress != "0xnull" &&
+                pairAddress != "0x0000000000000000000000000000000000000000"
+
+        if (!assetExists || !pairExists) {
+            val newAddress = if (!assetExists) {
+                AssetFactory.createAsset(name, symbol) ?: error("Asset creation failed")
+                AssetFactory.getAssetAddress(name) ?: error("Asset address not found after creation")
+            } else {
+                existingAddress!!
+            }
 
             Uniswap.createPair(Blockcoin.address, newAddress)
 
             val adminTxManager = AssetFactory.txManager
-            val adminAddress = Address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")
+            val adminAddress = Address(adminTxManager.fromAddress)
             val mcAsset = MinecraftAsset(newAddress, Blockcoin.web3, adminTxManager)
 
             val blockcoinAmount = BigInteger("1000").multiply(ERC20_DECIMALS)
@@ -256,12 +271,14 @@ class SellItemsCommand(
             plugin,
             Runnable {
                 try {
+                    println("executing sell command")
                     val receivedBlockcoin = performSellBlockchain(
                         sender.uniqueId,
                         material,
                         amount,
                         walletAddress
                     )
+                    println("finished performsellblockchain")
 
                     Bukkit.getScheduler().runTask(plugin, Runnable {
                         sender.sendMessage(
@@ -274,6 +291,8 @@ class SellItemsCommand(
                     })
 
                 } catch (e: Exception) {
+                    println("❌ Exception in sell: ${e.javaClass.name}: ${e.message}")
+                    e.printStackTrace()
                     Bukkit.getScheduler().runTask(plugin, Runnable {
                         restoreInventory(sender, inventorySnapshot)
                         sender.sendMessage(Component.text("❌ Sale failed. Items refunded."))
