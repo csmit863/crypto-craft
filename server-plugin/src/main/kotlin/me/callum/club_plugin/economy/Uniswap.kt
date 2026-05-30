@@ -344,32 +344,51 @@ object Uniswap {
                 to,
                 deadline
             ),
-            listOf(
-                object : TypeReference<Uint256>() {},
-                object : TypeReference<Uint256>() {},
-                object : TypeReference<Uint256>() {}
-            )
+            emptyList()
         )
 
         val encoded = FunctionEncoder.encode(function)
 
-        val tx = senderTxManager.sendTransaction(
-            gasProvider.gasPrice,
-            gasProvider.getGasLimit("addLiquidity"),
+        val estimateTx = Transaction.createFunctionCallTransaction(
+            senderTxManager.fromAddress,
+            null,
+            null,
+            null,
+            v2routerAddress,
+            encoded
+        )
+
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+        val response = senderTxManager.sendTransaction(
+            gasPrice,
+            gasLimit,
             v2routerAddress,
             encoded,
             BigInteger.ZERO
         )
 
-        require(tx.transactionHash != null) { "addLiquidity tx hash is null" }
+        println("FULL RESPONSE: $response")
+        println("TX HASH: ${response.transactionHash}")
+        println("ERROR: ${response.error}")
 
-        val receipt = waitForReceipt(tx.transactionHash)
+        if (response.error != null) {
+            throw IllegalArgumentException(
+                "addLiquidity failed: ${response.error.message}"
+            )
+        }
+
+        val txHash = response.transactionHash
+            ?: throw IllegalArgumentException("addLiquidity txHash is null but no error returned")
+
+        val receipt = waitForReceipt(txHash)
             ?: error("No receipt for addLiquidity")
 
         require(receipt.status == "0x1") {
-            "addLiquidity reverted: ${receipt.transactionHash}"
+            "addLiquidity reverted: $txHash"
         }
-        Bukkit.getLogger().info("addLiquidity tx sent: ${tx.transactionHash}")
+
+        Bukkit.getLogger().info("addLiquidity tx sent: $txHash")
         return receipt
     }
 
@@ -378,31 +397,69 @@ object Uniswap {
 
     fun swapTokens(){}
 
-    public fun createPair(tokenA: String, tokenB: String): String {
-         // create pair tx & send to v2Factory (createPair function, see interface)
-         println("Creating pair with $tokenA and $tokenB")
-         val function = Function(
-             "createPair",
-             listOf(Address(tokenA), Address(tokenB)),
-             emptyList()
-         )
-         val encodedFunction = FunctionEncoder.encode(function)
-         val txHash = txManager.sendTransaction(
-             gasProvider.gasPrice,
-             gasProvider.getGasLimit("createPair"),
-             v2factoryAddress,
-             encodedFunction,
-             BigInteger.ZERO
-         ).transactionHash
-         println("Create Pair transaction sent: $txHash")
+    fun createPair(tokenA: String, tokenB: String): String {
 
-         val receipt = waitForReceipt(txHash)
-         if (receipt == null) {
-             println("❌ Failed to get receipt for create pair tx: $txHash")
-             return "0xnull"
-         }
-         return receipt.toString()
+        println("Creating pair with $tokenA and $tokenB")
 
+        val function = Function(
+            "createPair",
+            listOf(Address(tokenA), Address(tokenB)),
+            emptyList()
+        )
+
+        val encoded = FunctionEncoder.encode(function)
+
+        // -------------------------
+        // GAS ESTIMATION
+        // -------------------------
+        val estimateTx = Transaction.createFunctionCallTransaction(
+            txManager.fromAddress,
+            null,
+            null,
+            null,
+            v2factoryAddress,
+            encoded
+        )
+
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(
+            web3,
+            estimateTx
+        )
+
+        println("Pair gas price: $gasPrice")
+        println("Pair gas limit: $gasLimit")
+
+        // -------------------------
+        // SEND TX
+        // -------------------------
+        val response = txManager.sendTransaction(
+            gasPrice,
+            gasLimit,
+            v2factoryAddress,
+            encoded,
+            BigInteger.ZERO
+        )
+
+        println("FULL RESPONSE: $response")
+        println("TX HASH: ${response.transactionHash}")
+        println("ERROR: ${response.error}")
+
+        require(response.transactionHash != null) {
+            "createPair failed: ${response.error?.message}"
+        }
+
+        val txHash = response.transactionHash
+
+        val receipt = waitForReceipt(txHash)
+            ?: error("No receipt for createPair")
+
+        require(receipt.status == "0x1") {
+            "createPair reverted: $txHash"
+        }
+
+        println("✅ Pair created: $txHash")
+
+        return txHash
     }
 
     fun swapExactTokensForTokens(
@@ -423,28 +480,51 @@ object Uniswap {
                 to,
                 deadline
             ),
-            listOf(object : TypeReference<org.web3j.abi.datatypes.generated.Uint256>() {})
+            emptyList()
         )
 
         val encoded = FunctionEncoder.encode(function)
 
-        val tx = senderTxManager.sendTransaction(
-            gasProvider.gasPrice,
-            gasProvider.getGasLimit("swapExactTokensForTokens"),
+        val estimateTx = Transaction.createFunctionCallTransaction(
+            senderTxManager.fromAddress,
+            null,
+            null,
+            null,
+            v2routerAddress,
+            encoded
+        )
+
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+        val response = senderTxManager.sendTransaction(
+            gasPrice,
+            gasLimit,
             v2routerAddress,
             encoded,
             BigInteger.ZERO
         )
 
-        require(tx.transactionHash != null) { "swapExactTokensForTokens tx hash is null" }
+        println("FULL RESPONSE: $response")
+        println("TX HASH: ${response.transactionHash}")
+        println("ERROR: ${response.error}")
 
-        val receipt = waitForReceipt(tx.transactionHash)
+        if (response.error != null) {
+            throw IllegalArgumentException(
+                "swapExactTokensForTokens failed: ${response.error.message}"
+            )
+        }
+
+        val txHash = response.transactionHash
+            ?: throw IllegalArgumentException("swapExactTokensForTokens txHash is null but no error returned")
+
+        val receipt = waitForReceipt(txHash)
             ?: error("No receipt for swapExactTokensForTokens")
 
         require(receipt.status == "0x1") {
-            "swapExactTokensForTokens reverted: ${tx.transactionHash}"
+            "swapExactTokensForTokens reverted: $txHash"
         }
-        Bukkit.getLogger().info("swapExactTokensForTokens tx sent: ${tx.transactionHash}")
+
+        Bukkit.getLogger().info("swapExactTokensForTokens tx sent: $txHash")
         return receipt
     }
 
@@ -469,39 +549,55 @@ object Uniswap {
                 to,
                 deadline
             ),
-            listOf(
-                object : TypeReference<org.web3j.abi.datatypes.DynamicArray<Uint256>>() {}
-            )
+            emptyList()
         )
 
         val encoded = FunctionEncoder.encode(function)
 
-        val tx = senderTxManager.sendTransaction(
-            gasProvider.gasPrice,
-            gasProvider.getGasLimit("swapTokensForExactTokens"),
+        val estimateTx = Transaction.createFunctionCallTransaction(
+            senderTxManager.fromAddress,
+            null,
+            null,
+            null,
+            v2routerAddress,
+            encoded
+        )
+
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+        val response = senderTxManager.sendTransaction(
+            gasPrice,
+            gasLimit,
             v2routerAddress,
             encoded,
             BigInteger.ZERO
         )
 
-        require(tx.transactionHash != null) {
-            "swapTokensForExactTokens tx hash is null"
+        println("FULL RESPONSE: $response")
+        println("TX HASH: ${response.transactionHash}")
+        println("ERROR: ${response.error}")
+
+        if (response.error != null) {
+            throw IllegalArgumentException(
+                "swapTokensForExactTokens failed: ${response.error.message}"
+            )
         }
 
-        val receipt = waitForReceipt(tx.transactionHash)
+        val txHash = response.transactionHash
+            ?: throw IllegalArgumentException(
+                "swapTokensForExactTokens txHash is null but no error returned"
+            )
+
+        val receipt = waitForReceipt(txHash)
             ?: error("No receipt for swapTokensForExactTokens")
 
         require(receipt.status == "0x1") {
-            "swapTokensForExactTokens reverted: ${tx.transactionHash}"
+            "swapTokensForExactTokens reverted: $txHash"
         }
 
-        Bukkit.getLogger().info(
-            "swapTokensForExactTokens tx sent: ${tx.transactionHash}"
-        )
+        Bukkit.getLogger().info("swapTokensForExactTokens tx sent: $txHash")
 
         return receipt
     }
-
-
 
 }

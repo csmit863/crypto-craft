@@ -98,6 +98,24 @@ class SellItemsCommand(
         return remaining == 0
     }
 
+    fun ensureLiquidity(assetAddress: String): Boolean {
+        val pair = Uniswap.getPair(Blockcoin.address, assetAddress).get()
+
+        if (pair == null ||
+            pair == "0x0000000000000000000000000000000000000000"
+        ) {
+            return false
+        }
+
+        val reserves = try {
+            Uniswap.getReserves(pair).get()
+        } catch (e: Exception) {
+            return false
+        }
+
+        return reserves.first > BigInteger.ZERO && reserves.second > BigInteger.ZERO
+    }
+
     private fun performSellBlockchain(
         playerUUID: UUID,
         material: Material,
@@ -116,6 +134,7 @@ class SellItemsCommand(
 
         // asset / pair creation
         val assetExists = AssetFactory.checkAssetExists(name)
+        println("assetExists: "+ assetExists);
         val existingAddress = if (assetExists) AssetFactory.getAssetAddress(name) else null
         val pairAddress = if (existingAddress != null) {
             Uniswap.getPair(Blockcoin.address, existingAddress).get()
@@ -124,7 +143,7 @@ class SellItemsCommand(
                 pairAddress != "0xnull" &&
                 pairAddress != "0x0000000000000000000000000000000000000000"
 
-        if (!assetExists || !pairExists) {
+        if (!assetExists || !pairExists || !ensureLiquidity(existingAddress ?: "")) {
             val newAddress = if (!assetExists) {
                 AssetFactory.createAsset(name, symbol) ?: error("Asset creation failed")
                 AssetFactory.getAssetAddress(name) ?: error("Asset address not found after creation")
@@ -132,7 +151,10 @@ class SellItemsCommand(
                 existingAddress!!
             }
 
-            Uniswap.createPair(Blockcoin.address, newAddress)
+            // only create pair if it doesn't exist
+            if (!pairExists) {
+                Uniswap.createPair(Blockcoin.address, newAddress)
+            }
 
             val adminTxManager = AssetFactory.txManager
             val adminAddress = Address(adminTxManager.fromAddress)
@@ -141,9 +163,20 @@ class SellItemsCommand(
             val blockcoinAmount = BigInteger("1000").multiply(ERC20_DECIMALS)
             val assetAmount = ERC20_DECIMALS
 
-            mcAsset.mint(adminAddress.toString(), assetAmount)
-            Blockcoin.approveSpending(Uniswap.v2routerAddress, blockcoinAmount, adminTxManager)
-            mcAsset.approveSpending(Uniswap.v2routerAddress, assetAmount, adminTxManager)
+            mcAsset.mint(
+                adminAddress.toString(),
+                assetAmount
+            )
+            Blockcoin.approveSpending(
+                Uniswap.v2routerAddress,
+                blockcoinAmount,
+                adminTxManager
+            )
+            mcAsset.approveSpending(
+                Uniswap.v2routerAddress,
+                assetAmount,
+                adminTxManager
+            )
 
             Uniswap.addLiquidity(
                 Blockcoin.address,
@@ -176,7 +209,23 @@ class SellItemsCommand(
         asset.approveSpending(Uniswap.v2routerAddress, amountWei, txManager)
 
         val path = listOf(assetAddress, Blockcoin.address)
+        val pair = Uniswap.getPair(Blockcoin.address, assetAddress).get()
+
+        val hasLiquidity = ensureLiquidity(assetAddress)
+
+        if (!hasLiquidity) {
+            throw IllegalStateException(
+                "Market not initialized: no liquidity for $assetAddress (pair=$pair)"
+            )
+        }
         val amountsOut = Uniswap.getAmountsOut(amountWei, path).get()
+
+        if (amountsOut.isEmpty()) {
+            throw IllegalStateException(
+                "No swap quote available. Likely no liquidity or wrong path: $path"
+            )
+        }
+
         val expectedOut = amountsOut.last()
 
         val receipt = Uniswap.swapExactTokensForTokens(

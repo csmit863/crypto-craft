@@ -13,7 +13,7 @@ if [ "$1" = "sepolia" ]; then
 elif [ "$1" = "base" ]; then
   echo "base mainnet selected"
   RPC_URL=${RPC_URL_BASE}
-  PRIVATE_KEY=${PRIVATE_KEY_BASE}
+  PRIVATE_KEY=${PRIVATE_KEY_SEPOLIA}
   BLOCKCOIN_ADDRESS=${BLOCKCOIN_ADDRESS_BASE}
   ASSETFACTORY_ADDRESS=${ASSETFACTORY_ADDRESS_BASE}
   UNISWAP_FACTORY_ADDRESS=${UNISWAP_FACTORY_ADDRESS_BASE}
@@ -38,7 +38,8 @@ else
   echo "Deploying fresh contracts..."
   forge script script/DeployContracts.s.sol:Setup --private-key ${PRIVATE_KEY} \
   --broadcast --rpc-url ${RPC_URL} --json 2>&1 \
-    | jq -s '.' > deployments.json
+  | grep -E '^\{"logs"' \
+  | jq -s '.' > deployments.json
 fi
 
 if [ -n "$UNISWAP_FACTORY_ADDRESS" ] && [ -n "$UNISWAP_ROUTER_ADDRESS" ]; then

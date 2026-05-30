@@ -12,7 +12,7 @@ import java.io.File
 import java.math.BigInteger
 
 data class WorldBorderState(
-    val base: Int = 1000,
+    val base: Int = 10,
     var expanded: Long = 0
 )
 

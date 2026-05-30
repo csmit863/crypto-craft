@@ -259,10 +259,21 @@ object Blockcoin {
 
         val encodedFunction = FunctionEncoder.encode(approveFunction)
 
+        val estimateTx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+            providedTxManager.fromAddress,
+            null,
+            null,
+            null,
+            blockcoinAddress,
+            encodedFunction
+        )
+
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
         return try {
             val transactionResponse = providedTxManager.sendTransaction(
-                DefaultGasProvider.GAS_PRICE,
-                DefaultGasProvider.GAS_LIMIT,
+                gasPrice,
+                gasLimit,
                 this.address,
                 encodedFunction,
                 BigInteger.ZERO

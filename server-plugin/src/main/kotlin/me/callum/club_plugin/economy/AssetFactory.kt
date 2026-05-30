@@ -22,6 +22,7 @@ import java.io.FileWriter
 import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
 import org.web3j.abi.datatypes.Type
+import org.web3j.protocol.core.methods.request.Transaction
 
 // a singleton to interact with the AssetFactory contract
 
@@ -189,9 +190,9 @@ object AssetFactory {
     }
 
     fun checkAssetExists(name: String): Boolean {
-        println(assets[normalizeName(name)]);
         return assets[normalizeName(name)] != null
     }
+
     fun checkAssetExistsold(name: String): Boolean {
         println("running check asset exists")
         // uses getAllAssets to get all token addresses, gets name from each token contract and compare to existing assets.json
@@ -237,55 +238,115 @@ object AssetFactory {
 
 
     fun createAsset(name: String, symbol: String): String? {
-        val upload_name = normalizeName(name)
-        println("creating asset $upload_name")
+
+        val uploadName = normalizeName(name)
+
+        println("creating asset $uploadName")
+
         val function = Function(
             "createAsset",
-            listOf(Utf8String(upload_name), Utf8String(symbol)),
+            listOf(
+                Utf8String(uploadName),
+                Utf8String(symbol)
+            ),
             emptyList()
         )
 
         val encodedFunction = FunctionEncoder.encode(function)
-        val txHash = txManager.sendTransaction(
-            gasProvider.gasPrice,
-            gasProvider.getGasLimit("createAsset"),
+
+        // -----------------------------
+        // Dynamic gas price
+        // -----------------------------
+
+        val gasPrice = web3.ethGasPrice()
+            .send()
+            .gasPrice
+
+        println("Gas price: $gasPrice")
+
+        // -----------------------------
+        // Estimate gas
+        // -----------------------------
+
+        val estimateTx = Transaction.createFunctionCallTransaction(
+            txManager.fromAddress,
+            null,
+            gasPrice,
+            null,
+            factoryAddress,
+            encodedFunction
+        )
+
+        val estimateResponse = web3.ethEstimateGas(estimateTx).send()
+
+        require(estimateResponse.amountUsed != null) {
+            "Failed to estimate gas: ${estimateResponse.error?.message}"
+        }
+
+        // add 20% safety buffer
+        val gasLimit = estimateResponse.amountUsed
+            .multiply(BigInteger("12"))
+            .divide(BigInteger.TEN)
+
+        println("Estimated gas: ${estimateResponse.amountUsed}")
+        println("Buffered gas limit: $gasLimit")
+
+        // -----------------------------
+        // Send transaction
+        // -----------------------------
+
+        val response = txManager.sendTransaction(
+            gasPrice,
+            gasLimit,
             factoryAddress,
             encodedFunction,
             BigInteger.ZERO
-        ).transactionHash
+        )
+
+        println("FULL RESPONSE: $response")
+        println("TX HASH: ${response.transactionHash}")
+        println("ERROR: ${response.error}")
+
+        require(response.transactionHash != null) {
+            "Transaction failed: ${response.error?.message}"
+        }
+
+        val txHash = response.transactionHash
 
         println("Create asset transaction sent: $txHash")
 
+        // -----------------------------
+        // Wait for receipt
+        // -----------------------------
+
         val receipt = waitForReceipt(txHash)
-        if (receipt == null) {
-            println("❌ Failed to get receipt for tx: $txHash")
-            return null
+
+        require(receipt != null) {
+            "Failed to get receipt for tx: $txHash"
         }
 
-        // Event definition
-        val assetCreatedEvent = org.web3j.abi.datatypes.Event(
-            "AssetCreated",
-            listOf(
-                TypeReference.create(Address::class.java),
-                TypeReference.create(Utf8String::class.java),
-                TypeReference.create(Utf8String::class.java),
-                TypeReference.create(Address::class.java)
-            )
-        )
+        require(receipt.status == "0x1") {
+            "Transaction reverted: $txHash"
+        }
 
-        val eventSig = "0x" + Hash.sha3String("AssetCreated(address,string,string,address)")
-            .removePrefix("0x")
+        // -----------------------------
+        // Decode AssetCreated event
+        // -----------------------------
+
+        val eventSig =
+            "0x" + Hash.sha3String(
+                "AssetCreated(address,string,string,address)"
+            ).removePrefix("0x")
 
         val log = receipt.logs.firstOrNull {
-            it.topics.isNotEmpty() && it.topics[0].lowercase() == eventSig.lowercase()
+            it.topics.isNotEmpty() &&
+                    it.topics[0].equals(eventSig, ignoreCase = true)
         }
 
-        if (log == null) {
-            println("⚠️ AssetCreated event not found in receipt")
-            return null
+        require(log != null) {
+            "AssetCreated event not found"
         }
 
-        // All 4 params are non-indexed, so everything is in log.data
         val decoded = FunctionReturnDecoder.decode(
             log.data,
             listOf(
@@ -297,14 +358,19 @@ object AssetFactory {
         )
 
         val assetAddress = (decoded[0] as Address).value
-        val createdName  = (decoded[1] as Utf8String).value
+        val createdName = (decoded[1] as Utf8String).value
         val createdSymbol = (decoded[2] as Utf8String).value
-        val owner        = (decoded[3] as Address).value
+        val owner = (decoded[3] as Address).value
 
         saveAsset(createdName, assetAddress)
-        println("✅ Asset created: $createdName -> $assetAddress (owner: $owner)")
-        return assetAddress
 
+        println(
+            "✅ Asset created: " +
+                    "$createdName ($createdSymbol) -> " +
+                    "$assetAddress owner=$owner"
+        )
+
+        return assetAddress
     }
 
 
@@ -337,15 +403,31 @@ object AssetFactory {
         val encodedFunction = FunctionEncoder.encode(mintFunction)
 
         return try {
+            println("gasPrice = ${gasProvider.gasPrice}")
+            println("gasLimit = ${gasProvider.getGasLimit("tokenizeItems")}")
+            println("txManager = $txManager")
+            val estimateTx = Transaction.createFunctionCallTransaction(
+                txManager.fromAddress,
+                null,
+                null,
+                null,
+                assetAddress,
+                encodedFunction
+            )
+
+            val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
             val tx = txManager.sendTransaction(
-                gasProvider.gasPrice,
-                gasProvider.getGasLimit("tokenizeItems"),
+                gasPrice,
+                gasLimit,
                 assetAddress,
                 encodedFunction,
                 BigInteger.ZERO
             )
-
-            val txHash = tx.transactionHash
+            println("FULL RESPONSE: $tx")
+            val txHash = requireNotNull(tx.transactionHash) {
+                "Transaction sent but hash is null (RPC or txManager failure)"
+            }
             println("✅ Mint transaction sent: $txHash")
 
             val receipt = waitForReceipt(txHash)
@@ -363,7 +445,8 @@ object AssetFactory {
             txHash
 
         } catch (e: Exception) {
-            println("❌ Exception during mint: ${e.message}")
+            println("❌ Mint failed with exception:")
+            e.printStackTrace();
             null
         }
     }

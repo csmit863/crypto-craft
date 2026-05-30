@@ -95,7 +95,7 @@ object WalletManager: Listener {
         saveWallets()
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
+    @OptIn(ExperimentalStdlibApi::class) // only works on QUT Testnet
     fun fundWalletEth(toAddress: String): CompletableFuture<Boolean> {
         val senderPrivateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" // Replace with actual private key
         val senderAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Replace with actual sender address

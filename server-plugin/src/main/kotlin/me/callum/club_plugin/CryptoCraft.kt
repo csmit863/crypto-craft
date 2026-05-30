@@ -28,7 +28,7 @@ data class DeploymentLog(
 )
 
 data class WorldBorderState(
-    val base: Int = 200,
+    val base: Int = 10,
     var expanded: Long = 0
 )
 

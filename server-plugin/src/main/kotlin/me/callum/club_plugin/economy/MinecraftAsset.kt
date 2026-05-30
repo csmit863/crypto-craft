@@ -10,7 +10,6 @@ import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.response.TransactionReceipt
 import org.web3j.tx.RawTransactionManager
-import org.web3j.tx.gas.DefaultGasProvider
 import java.math.BigInteger
 
 
@@ -79,61 +78,91 @@ class MinecraftAsset(private val tokenAddress: String, private val web3: Web3j, 
         }
     }
 
-    fun mint(walletAddress: String, amount: BigInteger): String? { // has to be admin
+    fun mint(walletAddress: String, amount: BigInteger): String {
+
         val mintFunction = Function(
             "tokenizeItems",
             listOf(Address(walletAddress), Uint256(amount)),
             emptyList()
         )
+
         val encodedFunction = FunctionEncoder.encode(mintFunction)
 
-        return try {
-            val transactionResponse = txManager.sendTransaction(
-                DefaultGasProvider.GAS_PRICE,
-                DefaultGasProvider.GAS_LIMIT,
-                tokenAddress,
-                encodedFunction,
-                BigInteger.ZERO
-            )
+        val estimateTx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+            txManager.fromAddress,
+            null,
+            null,
+            null,
+            tokenAddress,
+            encodedFunction
+        )
 
-            println("Mint transaction sent: ${transactionResponse.transactionHash}")
-            // Get the receipt and return the transaction hash on success
-            val receipt = waitForReceipt(transactionResponse.transactionHash)
-            receipt?.transactionHash  // Return the transaction hash (String?)
-        } catch (e: Exception) {
-            println("Exception during mint: ${e.message}")
-            null
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+        val response = txManager.sendTransaction(
+            gasPrice,
+            gasLimit,
+            tokenAddress,
+            encodedFunction,
+            BigInteger.ZERO
+        )
+
+        val txHash = response.transactionHash
+            ?: throw IllegalStateException("Mint failed: ${response.error?.message}")
+
+        val receipt = waitForReceipt(txHash)
+            ?: error("No receipt for mint tx: $txHash")
+
+        require(receipt.status == "0x1") {
+            "Mint reverted: $txHash"
         }
+
+        return txHash
     }
 
     /**
      * Burns tokens from the specified wallet address.
      */
-    fun burn(walletAddress: String, amount: BigInteger): String? {
+    fun burn(walletAddress: String, amount: BigInteger): String {
+
         val burnFunction = Function(
             "burnItems",
             listOf(Address(walletAddress), Uint256(amount)),
             emptyList()
         )
+
         val encodedFunction = FunctionEncoder.encode(burnFunction)
 
-        return try {
-            val transactionResponse = txManager.sendTransaction(
-                DefaultGasProvider.GAS_PRICE,
-                DefaultGasProvider.GAS_LIMIT,
-                tokenAddress,
-                encodedFunction,
-                BigInteger.ZERO
-            )
+        val estimateTx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+            txManager.fromAddress,
+            null,
+            null,
+            null,
+            tokenAddress,
+            encodedFunction
+        )
 
-            println("Burn transaction sent: ${transactionResponse.transactionHash}")
-            // Get the receipt and return the transaction hash on success
-            val receipt = waitForReceipt(transactionResponse.transactionHash)
-            receipt?.transactionHash  // Return the transaction hash (String?)
-        } catch (e: Exception) {
-            println("Exception during burn: ${e.message}")
-            null
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+        val response = txManager.sendTransaction(
+            gasPrice,
+            gasLimit,
+            tokenAddress,
+            encodedFunction,
+            BigInteger.ZERO
+        )
+
+        val txHash = response.transactionHash
+            ?: throw IllegalArgumentException("burn failed: ${response.error?.message}")
+
+        val receipt = waitForReceipt(txHash)
+            ?: error("No receipt for burn tx: $txHash")
+
+        require(receipt.status == "0x1") {
+            "burn reverted: $txHash"
         }
+
+        return txHash
     }
 
 
@@ -192,33 +221,50 @@ class MinecraftAsset(private val tokenAddress: String, private val web3: Web3j, 
     /**
      * Approves the specified spender to spend the given amount of tokens on behalf of the caller.
      */
-    public fun approveSpending(spenderAddress: String, amount: BigInteger, providedTxManager: RawTransactionManager): String? {
+    public fun approveSpending(
+        spenderAddress: String,
+        amount: BigInteger,
+        providedTxManager: RawTransactionManager
+    ): String {
+
         val approveFunction = Function(
             "approve",
-            listOf(Address(spenderAddress), Uint256(amount)), // Parameters: spender address and amount
-            emptyList()  // No return values expected
+            listOf(Address(spenderAddress), Uint256(amount)),
+            emptyList()
         )
 
         val encodedFunction = FunctionEncoder.encode(approveFunction)
 
-        return try {
-            val transactionResponse = providedTxManager.sendTransaction(
-                DefaultGasProvider.GAS_PRICE,
-                DefaultGasProvider.GAS_LIMIT,
-                tokenAddress,
-                encodedFunction,
-                BigInteger.ZERO
-            )
+        val estimateTx = org.web3j.protocol.core.methods.request.Transaction.createFunctionCallTransaction(
+            providedTxManager.fromAddress,
+            null,
+            null,
+            null,
+            tokenAddress,
+            encodedFunction
+        )
 
-            println("Minecraft Asset approval transaction sent ($amount approved): ${transactionResponse.transactionHash}")
+        val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
 
-            // Get the receipt and return the transaction hash on success
-            val receipt = waitForReceipt(transactionResponse.transactionHash)
-            receipt?.transactionHash  // Return the transaction hash (String?)
-        } catch (e: Exception) {
-            println("Exception during approval: ${e.message}")
-            null
+        val response = providedTxManager.sendTransaction(
+            gasPrice,
+            gasLimit,
+            tokenAddress,
+            encodedFunction,
+            BigInteger.ZERO
+        )
+
+        val txHash = response.transactionHash
+            ?: throw IllegalArgumentException("approveSpending failed: ${response.error?.message}")
+
+        val receipt = waitForReceipt(txHash)
+            ?: error("No receipt for approveSpending tx: $txHash")
+
+        require(receipt.status == "0x1") {
+            "approveSpending reverted: $txHash"
         }
+
+        return txHash
     }
 
 }
