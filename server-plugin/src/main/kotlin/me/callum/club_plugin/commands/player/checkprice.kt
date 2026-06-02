@@ -48,13 +48,17 @@ class CheckPriceCommand(private val plugin: JavaPlugin) : CommandExecutor {
 
             try {
                 if (!AssetFactory.checkAssetExists(itemName)) {
-                    Bukkit.getScheduler().runTask(plugin, Runnable {
-                        sender.sendMessage(
-                            Component.text("No market exists for $itemName")
-                                .color(TextColor.color(255, 165, 0))
-                        )
-                    })
-                    return@Runnable
+                    AssetFactory.syncFromChain()
+
+                    if (!AssetFactory.checkAssetExists(itemName)) {
+                        Bukkit.getScheduler().runTask(plugin, Runnable {
+                            sender.sendMessage(
+                                Component.text("No market exists for $itemName")
+                                    .color(TextColor.color(255, 165, 0))
+                            )
+                        })
+                        return@Runnable
+                    }
                 }
 
                 val assetAddress = AssetFactory.getAssetAddress(itemName)

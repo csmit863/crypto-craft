@@ -1,25 +1,57 @@
 services:
-  mc:
+  mc1: 
     image: itzg/minecraft-server:stable
     environment:
       VERSION: "1.21.1"
-      INIT_MEMORYY: 1G
+      INIT_MEMORY: 1G
       MAX_MEMORY: 2G
       EULA: "true"
       TYPE: "PAPER"
       OPS: "ConciseCoast40"
-      WHITELIST: |
-        ConciseCoast40
-        GandalfTheBlack
-      
+      SEED: "3269830995"
+      ONLINE_MODE: "false"
+      SPAWN_PROTECTION: "0"
     ports:
       - "25565:25565"
     volumes:
-      - ./data:/data
-      - ./plugins:/data/plugins
-    stdin_open: true
-    tty: true
+      - ./data1:/data
+      - ./plugins1:/data/plugins
     restart: unless-stopped
-volumes:
-  data: {}
 
+  mc2: 
+    image: itzg/minecraft-server:stable
+    environment:
+      VERSION: "1.21.1"
+      INIT_MEMORY: 1G
+      MAX_MEMORY: 2G
+      EULA: "true"
+      TYPE: "PAPER"
+      OPS: "ConciseCoast40"
+      SEED: "-2308657758980788326"
+      ONLINE_MODE: "false"
+      SPAWN_PROTECTION: "0"
+    ports:
+      - "25566:25565"
+    volumes:
+      - ./data2:/data
+      - ./plugins2:/data/plugins
+    restart: unless-stopped
+
+  mc3: 
+    image: itzg/minecraft-server:stable
+    environment:
+      VERSION: "1.21.1"
+      INIT_MEMORY: 1G
+      MAX_MEMORY: 2G
+      EULA: "true"
+      TYPE: "PAPER"
+      OPS: "ConciseCoast40"
+      SEED: "-7459086882832383987"
+      ONLINE_MODE: "false"
+      SPAWN_PROTECTION: "0"
+    ports:
+      - "25567:25565"
+    volumes:
+      - ./data3:/data
+      - ./plugins3:/data/plugins
+    restart: unless-stopped

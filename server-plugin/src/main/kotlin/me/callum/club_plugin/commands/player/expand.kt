@@ -59,10 +59,10 @@ class Expand(
             // Current expanded blocks
             val currentExpanded = state.expanded.toDouble()
 
-            // Calculate cost progressively: 1 + 0.2 per already expanded block
+            // Calculate cost progressively: 1 + 1 per already expanded block
             var totalCost = 0.0
             for (i in 1..amount) {
-                totalCost += 1.0 + 0.2 * (currentExpanded + i - 1)
+                totalCost += 1.0 + 1 * (currentExpanded + i - 1)
             }
 
             val costWei = BigInteger.valueOf((totalCost * 1e18).toLong())
