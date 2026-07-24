@@ -6,10 +6,7 @@ import { Ownable } from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 
 contract BlockCoin is ERC20, Ownable {
-    constructor()
-    ERC20("BlockCoin","BLCK")
-    Ownable(msg.sender)
-    {
-        _mint(msg.sender, 3000000*10**18);
+    constructor() ERC20("BlockCoin","BLCK") Ownable(msg.sender) {
+        _mint(msg.sender, 3_000_000 * 1e18);
     }
 }

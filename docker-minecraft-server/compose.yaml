@@ -9,7 +9,6 @@ services:
       TYPE: "PAPER"
       OPS: "ConciseCoast40"
       SEED: "3269830995"
-      ONLINE_MODE: "false"
       SPAWN_PROTECTION: "0"
     ports:
       - "25565:25565"
@@ -28,7 +27,6 @@ services:
       TYPE: "PAPER"
       OPS: "ConciseCoast40"
       SEED: "-2308657758980788326"
-      ONLINE_MODE: "false"
       SPAWN_PROTECTION: "0"
     ports:
       - "25566:25565"
@@ -47,7 +45,6 @@ services:
       TYPE: "PAPER"
       OPS: "ConciseCoast40"
       SEED: "-7459086882832383987"
-      ONLINE_MODE: "false"
       SPAWN_PROTECTION: "0"
     ports:
       - "25567:25565"
