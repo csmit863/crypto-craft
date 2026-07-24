@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-
-import { AssetFactoryV2 } from "./AssetFactory.sol";
+contract Bank {}
+/*
+import { AssetFactoryV2 } from "./AssetFactoryV2.sol";
 import { BlockCoin } from "./BlockCoin.sol";
 
 
@@ -36,4 +37,4 @@ contract Bank {
     function withdraw() public {
 
     }
-}
+}*/

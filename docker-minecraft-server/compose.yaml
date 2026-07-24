@@ -17,38 +17,38 @@ services:
       - ./plugins1:/data/plugins
     restart: unless-stopped
 
-  mc2: 
-    image: itzg/minecraft-server:stable
-    environment:
-      VERSION: "1.21.1"
-      INIT_MEMORY: 1G
-      MAX_MEMORY: 2G
-      EULA: "true"
-      TYPE: "PAPER"
-      OPS: "ConciseCoast40"
-      SEED: "-2308657758980788326"
-      SPAWN_PROTECTION: "0"
-    ports:
-      - "25566:25565"
-    volumes:
-      - ./data2:/data
-      - ./plugins2:/data/plugins
-    restart: unless-stopped
+  #mc2: 
+  #  image: itzg/minecraft-server:stable
+  #  environment:
+  #    VERSION: "1.21.1"
+  #    INIT_MEMORY: 1G
+  #    MAX_MEMORY: 2G
+  #    EULA: "true"
+  #    TYPE: "PAPER"
+  #    OPS: "ConciseCoast40"
+  #    SEED: "-2308657758980788326"
+  #    SPAWN_PROTECTION: "0"
+  #  ports:
+  #    - "25566:25565"
+  #  volumes:
+  #    - ./data2:/data
+  #    - ./plugins2:/data/plugins
+  #  restart: unless-stopped
 
-  mc3: 
-    image: itzg/minecraft-server:stable
-    environment:
-      VERSION: "1.21.1"
-      INIT_MEMORY: 1G
-      MAX_MEMORY: 2G
-      EULA: "true"
-      TYPE: "PAPER"
-      OPS: "ConciseCoast40"
-      SEED: "-7459086882832383987"
-      SPAWN_PROTECTION: "0"
-    ports:
-      - "25567:25565"
-    volumes:
-      - ./data3:/data
-      - ./plugins3:/data/plugins
-    restart: unless-stopped
+  #mc3: 
+  #  image: itzg/minecraft-server:stable
+  #  environment:
+  #    VERSION: "1.21.1"
+  #    INIT_MEMORY: 1G
+  #    MAX_MEMORY: 2G
+  #    EULA: "true"
+  #    TYPE: "PAPER"
+  #    OPS: "ConciseCoast40"
+  #    SEED: "-7459086882832383987"
+  #    SPAWN_PROTECTION: "0"
+  #  ports:
+  #    - "25567:25565"
+  #  volumes:
+  #    - ./data3:/data
+  #    - ./plugins3:/data/plugins
+  #  restart: unless-stopped

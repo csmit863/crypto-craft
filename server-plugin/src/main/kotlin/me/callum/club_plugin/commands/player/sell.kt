@@ -123,14 +123,14 @@ class SellItemsCommand(
         walletAddress: String
     ): BigDecimal {
         // EVERYTHING here runs async
-        println("doing performsellblockchain")
+        println("performSellBlockchain()")
 
         val name = material.key.key.replace("_", " ")
             .lowercase().replaceFirstChar { it.uppercase() }
         val symbol = material.name.take(4).uppercase()
         val ERC20_DECIMALS = BigInteger.TEN.pow(18)
 
-        println(name+symbol+"ERC20 info");
+        println("ERC20 info:"+name+symbol);
 
         // asset / pair creation
         val assetExists = AssetFactory.checkAssetExists(name)
@@ -146,16 +146,17 @@ class SellItemsCommand(
         if (!assetExists || !pairExists || !ensureLiquidity(existingAddress ?: "")) {
             val newAddress = if (!assetExists) {
                 AssetFactory.createAsset(name, symbol) ?: error("Asset creation failed")
+                // create asset: does pair creation & liquidity seeding
                 AssetFactory.getAssetAddress(name) ?: error("Asset address not found after creation")
             } else {
                 existingAddress!!
             }
 
             // only create pair if it doesn't exist
-            if (!pairExists) {
+            /*if (!pairExists) {
                 Uniswap.createPair(Blockcoin.address, newAddress)
-            }
-
+            }*/
+            /*
             val adminTxManager = AssetFactory.txManager
             val adminAddress = Address(adminTxManager.fromAddress)
             val mcAsset = MinecraftAsset(newAddress, Blockcoin.web3, adminTxManager)
@@ -188,7 +189,7 @@ class SellItemsCommand(
                 adminAddress,
                 Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)),
                 adminTxManager
-            )
+            )*/
 
             AssetFactory.saveAsset(name, Keys.toChecksumAddress(newAddress))
         }

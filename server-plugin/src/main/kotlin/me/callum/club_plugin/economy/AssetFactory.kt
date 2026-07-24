@@ -239,6 +239,7 @@ object AssetFactory {
 
     fun createAsset(name: String, symbol: String): String? {
 
+        println("CREATE DA ASSET")
         val uploadName = normalizeName(name)
 
         println("creating asset $uploadName")
@@ -321,22 +322,24 @@ object AssetFactory {
 
         val receipt = waitForReceipt(txHash)
 
-        require(receipt != null) {
-            "Failed to get receipt for tx: $txHash"
-        }
+        require(receipt != null) { "Failed to get receipt for tx: $txHash" }
+        require(receipt.status == "0x1") { "Transaction reverted: $txHash" }
 
-        require(receipt.status == "0x1") {
-            "Transaction reverted: $txHash"
+        // DEBUG - print all logs
+        println("Total logs in receipt: ${receipt.logs.size}")
+        for ((i, log) in receipt.logs.withIndex()) {
+            println("Log[$i] address: ${log.address}")
+            println("Log[$i] topics: ${log.topics}")
+            println("Log[$i] data: ${log.data}")
         }
 
         // -----------------------------
         // Decode AssetCreated event
         // -----------------------------
 
-        val eventSig =
-            "0x" + Hash.sha3String(
-                "AssetCreated(address,string,string,address)"
-            ).removePrefix("0x")
+        val eventSig = "0x" + Hash.sha3String(
+            "AssetCreated(address,string,string,address,address,uint256,uint256)"
+        ).removePrefix("0x")
 
         val log = receipt.logs.firstOrNull {
             it.topics.isNotEmpty() &&
@@ -350,15 +353,18 @@ object AssetFactory {
         val decoded = FunctionReturnDecoder.decode(
             log.data,
             listOf(
-                object : TypeReference<Address>() {} as TypeReference<Type<*>>,
-                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>,
-                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>,
-                object : TypeReference<Address>() {} as TypeReference<Type<*>>
+                object : TypeReference<Address>() {}   as TypeReference<Type<*>>,  // assetAddress
+                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>, // name
+                object : TypeReference<Utf8String>() {} as TypeReference<Type<*>>, // symbol
+                object : TypeReference<Address>() {}   as TypeReference<Type<*>>,  // owner
+                object : TypeReference<Address>() {}   as TypeReference<Type<*>>,  // pair
+                object : TypeReference<Uint256>() {}   as TypeReference<Type<*>>,  // initialAssetAmount
+                object : TypeReference<Uint256>() {}   as TypeReference<Type<*>>   // initialBlockcoinAmount
             )
         )
 
         val assetAddress = (decoded[0] as Address).value
-        val createdName = (decoded[1] as Utf8String).value
+        val createdName  = (decoded[1] as Utf8String).value
         val createdSymbol = (decoded[2] as Utf8String).value
         val owner = (decoded[3] as Address).value
 
@@ -374,26 +380,11 @@ object AssetFactory {
     }
 
 
-    fun mintAsset(
-        assetAddress: String,
-        amount: BigInteger,
-        walletAddress: String
-    ): String? {
-        println(assetAddress)
-        // Hard guard – never attempt to mint to non-address
-        if (!assetAddress.startsWith("0x") || assetAddress.length != 42) {
-            println("❌ Invalid asset address: $assetAddress")
-            return null
-        }
-
-        if (!walletAddress.startsWith("0x") || walletAddress.length != 42) {
-            println("❌ Invalid wallet address: $walletAddress")
-            return null
-        }
-
+    fun mintAsset(assetAddress: String, amount: BigInteger, walletAddress: String): String? {
         val mintFunction = Function(
-            "tokenizeItems",
+            "mintAsset",  // call factory, not asset directly
             listOf(
+                Address(assetAddress),
                 Address(walletAddress),
                 Uint256(amount)
             ),
@@ -403,15 +394,12 @@ object AssetFactory {
         val encodedFunction = FunctionEncoder.encode(mintFunction)
 
         return try {
-            println("gasPrice = ${gasProvider.gasPrice}")
-            println("gasLimit = ${gasProvider.getGasLimit("tokenizeItems")}")
-            println("txManager = $txManager")
             val estimateTx = Transaction.createFunctionCallTransaction(
                 txManager.fromAddress,
                 null,
                 null,
                 null,
-                assetAddress,
+                factoryAddress,  // target is factory, not assetAddress
                 encodedFunction
             )
 
@@ -420,24 +408,19 @@ object AssetFactory {
             val tx = txManager.sendTransaction(
                 gasPrice,
                 gasLimit,
-                assetAddress,
+                factoryAddress,  // send to factory
                 encodedFunction,
                 BigInteger.ZERO
             )
-            println("FULL RESPONSE: $tx")
+
             val txHash = requireNotNull(tx.transactionHash) {
-                "Transaction sent but hash is null (RPC or txManager failure)"
+                "Transaction sent but hash is null"
             }
             println("✅ Mint transaction sent: $txHash")
 
             val receipt = waitForReceipt(txHash)
-            if (receipt == null) {
-                println("❌ No receipt for mint tx: $txHash")
-                return null
-            }
-
-            if (!receipt.isStatusOK) {
-                println("❌ Mint reverted: $txHash")
+            if (receipt == null || !receipt.isStatusOK) {
+                println("❌ Mint failed")
                 return null
             }
 
@@ -446,7 +429,7 @@ object AssetFactory {
 
         } catch (e: Exception) {
             println("❌ Mint failed with exception:")
-            e.printStackTrace();
+            e.printStackTrace()
             null
         }
     }
