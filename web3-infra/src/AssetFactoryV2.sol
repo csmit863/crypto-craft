@@ -30,9 +30,11 @@ contract AssetFactoryV2 is Ownable {
     IUniswapV2Factory  public immutable UNISWAP_FACTORY;
     BlockCoin          public immutable BLOCKCOIN;
 
-    uint256 public constant BLOCKCOIN_SEED   = 1000 * 1e18;
-    uint256 public constant ASSET_SEED_MIN   = 5    * 1e18;
-    uint256 public constant ASSET_SEED_RANGE = 16  * 1e18;
+    uint256 public constant SEED_MIN   = 5    * 1e18;
+    uint256 public constant SEED_RANGE = 16  * 1e18;
+
+    event AssetBurned(address asset, address caller, uint256 amountOut, uint256 amount);
+    event AssetSold(address asset, address recipient, uint256 amountIn, uint256 blockCoinOut);
 
     constructor(
         address _router
@@ -42,7 +44,9 @@ contract AssetFactoryV2 is Ownable {
         BLOCKCOIN      = new BlockCoin(); // AssetFactoryV2 becomes owner of BlockCoin, thus being minted 3m blockcoins
     }
 
+    // should be onlyOwner
     function createAsset(string memory name, string memory symbol) external returns (address) {
+        
         // factory is owner so it can mint seed supply for the pool
         MinecraftAsset newAsset = new MinecraftAsset(name, symbol, address(this));
         address assetAddress = address(newAsset);
@@ -51,12 +55,17 @@ contract AssetFactoryV2 is Ownable {
         isAsset[assetAddress] = true;
 
         // pseudo-random seed amount between 5-20 units
-        uint256 assetSeedAmount = ASSET_SEED_MIN + (
+        uint256 assetSeedAmount = SEED_MIN + (
             uint256(keccak256(abi.encodePacked(block.prevrandao, assetAddress, block.timestamp)))
-            % ASSET_SEED_RANGE
+            % SEED_RANGE
         );
 
-        // mint seed amounts directly into this contract
+        uint256 blockcoinSeedAmount = (SEED_MIN + (
+            uint256(keccak256(abi.encodePacked(block.prevrandao, address(BLOCKCOIN), block.timestamp)))
+            % SEED_RANGE
+        )) * 69;
+
+        // mint seed amounts of MinecraftAsset directly into this contract
         newAsset.tokenizeItems(address(this), assetSeedAmount);
 
 
@@ -68,27 +77,96 @@ contract AssetFactoryV2 is Ownable {
 
         // approve router to pull both tokens
         IERC20(assetAddress).approve(address(ROUTER), assetSeedAmount);
-        IERC20(address(BLOCKCOIN)).approve(address(ROUTER), BLOCKCOIN_SEED);
+        IERC20(address(BLOCKCOIN)).approve(address(ROUTER), blockcoinSeedAmount);
 
         // seed the pool: LP tokens locked in factory permanently
         ROUTER.addLiquidity(
             assetAddress,
             address(BLOCKCOIN),
             assetSeedAmount,
-            BLOCKCOIN_SEED,
+            blockcoinSeedAmount,
             0,               // amountAMin: no slippage protection needed for initial seed
             0,               // amountBMin
             address(this),   // LP tokens stay in factory (locked liquidity)
             block.timestamp + 300
         );
 
-        emit AssetCreated(assetAddress, name, symbol, msg.sender, pair, assetSeedAmount, BLOCKCOIN_SEED);
+        emit AssetCreated(assetAddress, name, symbol, msg.sender, pair, assetSeedAmount, blockcoinSeedAmount);
         return assetAddress;
     }
 
-    function mintAsset(address assetAddress, address to, uint256 amount) external onlyOwner {
+
+    function tokenizeAndSellAsset(
+        address assetAddress,
+        address recipient,
+        uint256 amountIn
+    ) external onlyOwner {
         require(isAsset[assetAddress], "Not a valid asset");
-        MinecraftAsset(assetAddress).tokenizeItems(to, amount);
+
+        // mint asset tokens into this contract
+        MinecraftAsset(assetAddress).tokenizeItems(address(this), amountIn);
+
+        // build swap path: asset --> BLOCKCOIN
+        address[] memory path = new address[](2);
+        path[0] = assetAddress;
+        path[1] = address(BLOCKCOIN);
+
+        // get quote with 1% slippage tolerance
+        uint256[] memory amountsOut = ROUTER.getAmountsOut(amountIn, path);
+        uint256 amountOutMin = amountsOut[1] * 99 / 100;
+
+        // approve router and swap
+        IERC20(assetAddress).approve(address(ROUTER), amountIn);
+        uint256[] memory amounts = ROUTER.swapExactTokensForTokens(
+            amountIn,
+            amountOutMin,
+            path,
+            recipient,  // BlockCoin goes directly to recipient
+            block.timestamp + 300
+        );
+
+        // amounts[1] is actual BlockCoin received. goes straight to recipient via router
+        emit AssetSold(assetAddress, recipient, amountIn, amounts[1]);
+    }
+
+    function buyAssetAndBurn(
+        address assetAddress,
+        uint256 amountOut  // how many item tokens the user wants
+    ) external {
+        require(isAsset[assetAddress], "Not a valid asset");
+
+        // build swap path: BLOCKCOIN --> asset
+        address[] memory path = new address[](2);
+        path[0] = address(BLOCKCOIN);
+        path[1] = assetAddress;
+
+        // calculate how much BLOCKCOIN is needed
+        uint256[] memory amountsIn = ROUTER.getAmountsIn(amountOut, path);
+        uint256 amountInMax = amountsIn[0] * 101 / 100; // 1% slippage
+
+        // pull BLOCKCOIN from caller into this contract
+        IERC20(address(BLOCKCOIN)).transferFrom(msg.sender, address(this), amountInMax);
+
+        // approve router and swap
+        IERC20(address(BLOCKCOIN)).approve(address(ROUTER), amountInMax);
+        uint256[] memory amounts = ROUTER.swapTokensForExactTokens(
+            amountOut,
+            amountInMax,
+            path,
+            address(this),  // asset tokens come here to be burned
+            block.timestamp + 300
+        );
+
+        // refund any unused BLOCKCOIN
+        uint256 refund = amountInMax - amounts[0];
+        if (refund > 0) {
+            IERC20(address(BLOCKCOIN)).transfer(msg.sender, refund);
+        }
+
+        // burn the asset tokens
+        MinecraftAsset(assetAddress).burnItems(address(this), amountOut);
+
+        emit AssetBurned(assetAddress, msg.sender, amountOut, amounts[0]);
     }
 
     function getAllAssets() external view returns (address[] memory) {

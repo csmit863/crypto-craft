@@ -3,6 +3,7 @@ package me.callum.club_plugin.economy
 import com.google.common.reflect.TypeToken
 import com.google.gson.Gson
 import org.bukkit.Bukkit
+import org.bukkit.Material
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
@@ -23,6 +24,7 @@ import java.math.BigInteger
 import java.util.concurrent.CompletableFuture
 import org.web3j.abi.datatypes.Type
 import org.web3j.protocol.core.methods.request.Transaction
+import java.math.BigDecimal
 
 // a singleton to interact with the AssetFactory contract
 
@@ -380,18 +382,22 @@ object AssetFactory {
     }
 
 
-    fun mintAsset(assetAddress: String, amount: BigInteger, walletAddress: String): String? {
-        val mintFunction = Function(
-            "mintAsset",  // call factory, not asset directly
+    fun tokenizeAndSellAsset(
+        assetAddress: String,
+        recipient: String,
+        amountIn: BigInteger
+    ): BigDecimal? {
+        val function = Function(
+            "tokenizeAndSellAsset",
             listOf(
                 Address(assetAddress),
-                Address(walletAddress),
-                Uint256(amount)
+                Address(recipient),
+                Uint256(amountIn)
             ),
             emptyList()
         )
 
-        val encodedFunction = FunctionEncoder.encode(mintFunction)
+        val encodedFunction = FunctionEncoder.encode(function)
 
         return try {
             val estimateTx = Transaction.createFunctionCallTransaction(
@@ -399,7 +405,7 @@ object AssetFactory {
                 null,
                 null,
                 null,
-                factoryAddress,  // target is factory, not assetAddress
+                factoryAddress,
                 encodedFunction
             )
 
@@ -408,29 +414,107 @@ object AssetFactory {
             val tx = txManager.sendTransaction(
                 gasPrice,
                 gasLimit,
-                factoryAddress,  // send to factory
+                factoryAddress,
                 encodedFunction,
                 BigInteger.ZERO
             )
 
-            val txHash = requireNotNull(tx.transactionHash) {
-                "Transaction sent but hash is null"
-            }
-            println("✅ Mint transaction sent: $txHash")
+            val txHash = requireNotNull(tx.transactionHash) { "TX hash null" }
+            println("✅ tokenizeAndSellAsset sent: $txHash")
 
             val receipt = waitForReceipt(txHash)
-            if (receipt == null || !receipt.isStatusOK) {
-                println("❌ Mint failed")
-                return null
-            }
+            require(receipt != null && receipt.isStatusOK) { "tokenizeAndSellAsset failed" }
 
-            println("✅ Successfully minted $amount tokens to $walletAddress")
+            // decode AssetSold event to get actual BlockCoin received
+            val eventSig = "0x" + Hash.sha3String(
+                "AssetSold(address,address,uint256,uint256)"
+            ).removePrefix("0x")
+
+            val log = receipt.logs.firstOrNull {
+                it.topics.isNotEmpty() &&
+                        it.topics[0].equals(eventSig, ignoreCase = true)
+            } ?: error("AssetSold event not found")
+
+            val decoded = FunctionReturnDecoder.decode(
+                log.data,
+                listOf(
+                    object : TypeReference<Address>() {}  as TypeReference<Type<*>>,  // asset
+                    object : TypeReference<Address>() {}  as TypeReference<Type<*>>,  // recipient
+                    object : TypeReference<Uint256>() {}  as TypeReference<Type<*>>,  // amountIn
+                    object : TypeReference<Uint256>() {}  as TypeReference<Type<*>>   // blockCoinOut
+                )
+            )
+
+            val blockCoinOut = (decoded[3] as Uint256).value
+            println("✅ Sold $amountIn tokens for $blockCoinOut BlockCoin")
+
+            BigDecimal(blockCoinOut).divide(BigDecimal(BigInteger.TEN.pow(18)))
+
+        } catch (e: Exception) {
+            println("❌ tokenizeAndSellAsset failed:")
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun buyAssetAndBurn(
+        assetAddress: String,
+        amountOut: BigInteger,
+        playerTxManager: RawTransactionManager  // player signs this
+    ): String? {
+        val function = Function(
+            "buyAssetAndBurn",
+            listOf(
+                Address(assetAddress),
+                Uint256(amountOut)
+            ),
+            emptyList()
+        )
+
+        val encodedFunction = FunctionEncoder.encode(function)
+
+        return try {
+            val estimateTx = Transaction.createFunctionCallTransaction(
+                playerTxManager.fromAddress,
+                null,
+                null,
+                null,
+                factoryAddress,
+                encodedFunction
+            )
+
+            val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+
+            val tx = playerTxManager.sendTransaction(
+                gasPrice,
+                gasLimit,
+                factoryAddress,
+                encodedFunction,
+                BigInteger.ZERO
+            )
+
+            val txHash = requireNotNull(tx.transactionHash) { "TX hash null" }
+            println("✅ buyAssetAndBurn sent: $txHash")
+
+            val receipt = waitForReceipt(txHash)
+            require(receipt != null && receipt.isStatusOK) { "buyAssetAndBurn reverted" }
+
+            println("✅ Successfully bought and burned $amountOut tokens")
             txHash
 
         } catch (e: Exception) {
-            println("❌ Mint failed with exception:")
+            println("❌ buyAssetAndBurn failed:")
             e.printStackTrace()
             null
+        }
+    }
+
+    fun getAssetNames(): List<String> {
+        return assets.keys.mapNotNull { normalizedName ->
+            // try to find a matching Material by comparing normalized names
+            Material.values().firstOrNull { material ->
+                normalizeName(material.key.key) == normalizedName
+            }?.key?.key  // return "sugar_cane" format
         }
     }
 

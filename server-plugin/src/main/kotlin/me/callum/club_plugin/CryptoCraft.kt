@@ -160,7 +160,11 @@ class CryptoCraft : JavaPlugin() {
             setExecutor(cmd)
             tabCompleter = cmd
         }
-        getCommand("buy")?.setExecutor(BuyItemsCommand(this@CryptoCraft, walletManager))
+        getCommand("buy")?.apply {
+            val cmd = BuyItemsCommand(this@CryptoCraft, walletManager)
+            setExecutor(cmd)
+            tabCompleter = cmd
+        }
         getCommand("liquidity")?.setExecutor(LiquidityCommand())
         getCommand("expand")?.setExecutor(Expand(this, walletManager))
 

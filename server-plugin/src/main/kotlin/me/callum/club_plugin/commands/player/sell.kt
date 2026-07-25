@@ -82,6 +82,12 @@ class SellItemsCommand(
             val item = inv.getItem(slot) ?: continue
             if (item.type != material) continue
 
+            // skip damaged tools
+            if (material.maxDurability > 0) {
+                val meta = item.itemMeta
+                if (meta is org.bukkit.inventory.meta.Damageable && meta.damage > 0) continue
+            }
+
             val take = minOf(item.amount, remaining)
             item.amount -= take
             remaining -= take
@@ -122,7 +128,6 @@ class SellItemsCommand(
         amount: Int,
         walletAddress: String
     ): BigDecimal {
-        // EVERYTHING here runs async
         println("performSellBlockchain()")
 
         val name = material.key.key.replace("_", " ")
@@ -130,117 +135,25 @@ class SellItemsCommand(
         val symbol = material.name.take(4).uppercase()
         val ERC20_DECIMALS = BigInteger.TEN.pow(18)
 
-        println("ERC20 info:"+name+symbol);
-
-        // asset / pair creation
-        val assetExists = AssetFactory.checkAssetExists(name)
-        println("assetExists: "+ assetExists);
-        val existingAddress = if (assetExists) AssetFactory.getAssetAddress(name) else null
-        val pairAddress = if (existingAddress != null) {
-            Uniswap.getPair(Blockcoin.address, existingAddress).get()
-        } else null
-        val pairExists = pairAddress != null &&
-                pairAddress != "0xnull" &&
-                pairAddress != "0x0000000000000000000000000000000000000000"
-
-        if (!assetExists || !pairExists || !ensureLiquidity(existingAddress ?: "")) {
-            val newAddress = if (!assetExists) {
-                AssetFactory.createAsset(name, symbol) ?: error("Asset creation failed")
-                // create asset: does pair creation & liquidity seeding
-                AssetFactory.getAssetAddress(name) ?: error("Asset address not found after creation")
-            } else {
-                existingAddress!!
-            }
-
-            // only create pair if it doesn't exist
-            /*if (!pairExists) {
-                Uniswap.createPair(Blockcoin.address, newAddress)
-            }*/
-            /*
-            val adminTxManager = AssetFactory.txManager
-            val adminAddress = Address(adminTxManager.fromAddress)
-            val mcAsset = MinecraftAsset(newAddress, Blockcoin.web3, adminTxManager)
-
-            val blockcoinAmount = BigInteger("1000").multiply(ERC20_DECIMALS)
-            val assetAmount = ERC20_DECIMALS
-
-            mcAsset.mint(
-                adminAddress.toString(),
-                assetAmount
-            )
-            Blockcoin.approveSpending(
-                Uniswap.v2routerAddress,
-                blockcoinAmount,
-                adminTxManager
-            )
-            mcAsset.approveSpending(
-                Uniswap.v2routerAddress,
-                assetAmount,
-                adminTxManager
-            )
-
-            Uniswap.addLiquidity(
-                Blockcoin.address,
-                newAddress,
-                blockcoinAmount,
-                assetAmount,
-                blockcoinAmount.multiply(BigInteger("99")).divide(BigInteger("100")),
-                assetAmount.multiply(BigInteger("99")).divide(BigInteger("100")),
-                adminAddress,
-                Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)),
-                adminTxManager
-            )*/
-
-            AssetFactory.saveAsset(name, Keys.toChecksumAddress(newAddress))
+        // create asset if it doesn't exist — factory handles pair + liquidity seeding
+        if (!AssetFactory.checkAssetExists(name)) {
+            AssetFactory.createAsset(name, symbol) ?: error("Asset creation failed")
         }
 
         val assetAddress = Keys.toChecksumAddress(
-            AssetFactory.getAssetAddress(name).toString()
+            AssetFactory.getAssetAddress(name) ?: error("Asset address not found")
         )
 
         val amountWei = BigInteger.valueOf(amount.toLong()).multiply(ERC20_DECIMALS)
 
-        AssetFactory.mintAsset(assetAddress, amountWei, walletAddress)
-            ?: error("Mint failed")
+        // single contract call: mint + swap + send blockcoin to player
+        val blockCoinReceived = AssetFactory.tokenizeAndSellAsset(
+            assetAddress,
+            walletAddress,
+            amountWei
+        ) ?: error("Sell failed")
 
-        val creds = Credentials.create(walletManager.getWalletAuth(playerUUID))
-        val txManager = RawTransactionManager(Blockcoin.web3, creds)
-        val asset = MinecraftAsset(assetAddress, Blockcoin.web3, txManager)
-
-        asset.approveSpending(Uniswap.v2routerAddress, amountWei, txManager)
-
-        val path = listOf(assetAddress, Blockcoin.address)
-        val pair = Uniswap.getPair(Blockcoin.address, assetAddress).get()
-
-        val hasLiquidity = ensureLiquidity(assetAddress)
-
-        if (!hasLiquidity) {
-            throw IllegalStateException(
-                "Market not initialized: no liquidity for $assetAddress (pair=$pair)"
-            )
-        }
-        val amountsOut = Uniswap.getAmountsOut(amountWei, path).get()
-
-        if (amountsOut.isEmpty()) {
-            throw IllegalStateException(
-                "No swap quote available. Likely no liquidity or wrong path: $path"
-            )
-        }
-
-        val expectedOut = amountsOut.last()
-
-        val receipt = Uniswap.swapExactTokensForTokens(
-            amountWei,
-            expectedOut.multiply(BigInteger("99")).divide(BigInteger("100")),
-            path,
-            Address(walletAddress),
-            Uint256(BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)),
-            txManager
-        )
-
-        require(receipt.status == "0x1") { "Swap failed" }
-
-        return BigDecimal(expectedOut).divide(BigDecimal(ERC20_DECIMALS))
+        return blockCoinReceived
     }
 
 
@@ -249,12 +162,29 @@ class SellItemsCommand(
         command: Command,
         alias: String,
         args: Array<out String>
-    ): List<String>? {
+    ): List<String> {
         if (args.size == 1) {
-            return org.bukkit.Material.values()
-                .map { it.key.toString() } // e.g. "minecraft:diamond"
+            val marketAssets = AssetFactory.getAssetNames()
                 .filter { it.startsWith(args[0], ignoreCase = true) }
-                .sorted()
+
+            // if we have market matches, show those + hand
+            // if not, fall back to all materials (for first-time sells)
+            return if (marketAssets.isNotEmpty() || args[0].equals("hand", ignoreCase = true)) {
+                val suggestions = mutableListOf("hand")
+                suggestions.addAll(marketAssets)
+                suggestions.filter { it.startsWith(args[0], ignoreCase = true) }.sorted()
+            } else {
+                val allMaterials = Material.values()
+                    .map { it.key.key }
+                    .filter { it.startsWith(args[0], ignoreCase = true) }
+                    .sorted()
+                listOf("hand") + allMaterials
+            }
+        }
+
+        if (args.size == 2) {
+            return listOf("all", "1", "8", "16", "32", "64")
+                .filter { it.startsWith(args[1], ignoreCase = true) }
         }
 
         return emptyList()
@@ -267,8 +197,6 @@ class SellItemsCommand(
         args: Array<out String>
     ): Boolean {
 
-        // ---- BASIC VALIDATION (MAIN THREAD ONLY)
-
         if (sender !is Player) {
             sender.sendMessage(Component.text("Only players can sell items."))
             return true
@@ -279,33 +207,96 @@ class SellItemsCommand(
             return true
         }
 
-        val rawMaterialName = args[0].substringAfter(":").uppercase()
-        val material = Material.matchMaterial(rawMaterialName)
-        val amount = args[1].toIntOrNull()
+        val rawArg = args[0]
 
-        if (material == null || amount == null || amount <= 0) {
-            sender.sendMessage(Component.text("Invalid item or amount."))
-            return true
+        // resolve material — "hand" uses held item
+        val material: Material
+        val rawMaterialName: String
+
+        if (rawArg.equals("hand", ignoreCase = true)) {
+            val heldItem = sender.inventory.itemInMainHand
+            if (heldItem.type == Material.AIR) {
+                sender.sendMessage(Component.text("You're not holding anything."))
+                return true
+            }
+            material = heldItem.type
+            rawMaterialName = material.name.lowercase().replace("_", " ")
+        } else {
+            val resolved = Material.matchMaterial(rawArg.substringAfter(":").uppercase())
+            if (resolved == null) {
+                sender.sendMessage(Component.text("Unknown item: $rawArg"))
+                return true
+            }
+            material = resolved
+            rawMaterialName = material.name.lowercase().replace("_", " ")
         }
 
+        // ---- DURABILITY CHECK
+        if (material.maxDurability > 0) {
+            // it's a tool/weapon/armour — check if held item is at full durability
+            val heldItem = sender.inventory.itemInMainHand
+            val isHand = rawArg.equals("hand", ignoreCase = true)
+
+            if (isHand) {
+                val meta = heldItem.itemMeta
+                if (meta is org.bukkit.inventory.meta.Damageable && meta.damage > 0) {
+                    sender.sendMessage(Component.text("❌ You can only sell undamaged tools."))
+                    return true
+                }
+            } else {
+                // check all matching items in inventory — reject if any are damaged
+                val damaged = sender.inventory.contents
+                    .filterNotNull()
+                    .filter { it.type == material }
+                    .any { item ->
+                        val meta = item.itemMeta
+                        meta is org.bukkit.inventory.meta.Damageable && meta.damage > 0
+                    }
+                if (damaged) {
+                    sender.sendMessage(Component.text("❌ You can only sell undamaged tools."))
+                    return true
+                }
+            }
+        }
+
+        // resolve amount: "all" sells everything of that type
         val totalInInventory = sender.inventory.contents
             .filterNotNull()
             .filter { it.type == material }
+            .filter { item ->
+                if (material.maxDurability > 0) {
+                    val meta = item.itemMeta
+                    meta !is org.bukkit.inventory.meta.Damageable || meta.damage == 0
+                } else true
+            }
             .sumOf { it.amount }
 
-        if (totalInInventory < amount) {
-            sender.sendMessage(Component.text("You don’t have enough $rawMaterialName."))
-            return true
+        val amount: Int = if (args[1].equals("all", ignoreCase = true)) {
+            if (totalInInventory == 0) {
+                sender.sendMessage(Component.text("You don't have any $rawMaterialName."))
+                return true
+            }
+            totalInInventory
+        } else {
+            val parsed = args[1].toIntOrNull()
+            if (parsed == null || parsed <= 0) {
+                sender.sendMessage(Component.text("Invalid amount."))
+                return true
+            }
+            if (totalInInventory < parsed) {
+                sender.sendMessage(Component.text("You only have $totalInInventory $rawMaterialName."))
+                return true
+            }
+            parsed
         }
 
         val walletAddress = walletManager.getWallet(sender.uniqueId)
         if (walletAddress == null) {
-            sender.sendMessage(Component.text("You don’t have a wallet yet."))
+            sender.sendMessage(Component.text("You don't have a wallet yet."))
             return true
         }
 
         // ---- SNAPSHOT + REMOVE ITEMS (MAIN THREAD)
-
         val inventorySnapshot = snapshotInventory(sender)
 
         if (!removeItemsExact(sender, material, amount)) {
@@ -313,44 +304,37 @@ class SellItemsCommand(
             return true
         }
 
-        sender.sendMessage(Component.text("⏳ Processing sale…"))
+        sender.sendMessage(Component.text("⏳ Selling $amount $rawMaterialName…"))
 
         // ---- ASYNC BLOCKCHAIN WORK
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
+            try {
+                val receivedBlockcoin = performSellBlockchain(
+                    sender.uniqueId,
+                    material,
+                    amount,
+                    walletAddress
+                )
 
-        Bukkit.getScheduler().runTaskAsynchronously(
-            plugin,
-            Runnable {
-                try {
-                    println("executing sell command")
-                    val receivedBlockcoin = performSellBlockchain(
-                        sender.uniqueId,
-                        material,
-                        amount,
-                        walletAddress
-                    )
-                    println("finished performsellblockchain")
-
-                    Bukkit.getScheduler().runTask(plugin, Runnable {
-                        sender.sendMessage(
-                            Component.text(
-                                "✅ Sold $amount $rawMaterialName for ${
-                                    receivedBlockcoin.stripTrailingZeros()
-                                } blockcoins"
-                            )
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    sender.sendMessage(
+                        Component.text(
+                            "✅ Sold $amount $rawMaterialName for ${
+                                receivedBlockcoin.stripTrailingZeros()
+                            } BLOCK"
                         )
-                    })
+                    )
+                })
 
-                } catch (e: Exception) {
-                    println("❌ Exception in sell: ${e.javaClass.name}: ${e.message}")
-                    e.printStackTrace()
-                    Bukkit.getScheduler().runTask(plugin, Runnable {
-                        restoreInventory(sender, inventorySnapshot)
-                        sender.sendMessage(Component.text("❌ Sale failed. Items refunded."))
-                    })
-                }
+            } catch (e: Exception) {
+                println("❌ Exception in sell: ${e.javaClass.name}: ${e.message}")
+                e.printStackTrace()
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    restoreInventory(sender, inventorySnapshot)
+                    sender.sendMessage(Component.text("❌ Sale failed. Items refunded."))
+                })
             }
-        )
-
+        })
 
         return true
     }

@@ -11,6 +11,7 @@ import org.bukkit.Material
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
+import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
@@ -51,7 +52,28 @@ import org.web3j.crypto.Credentials
 class BuyItemsCommand(
     private val plugin: JavaPlugin,
     private val walletManager: WalletManager
-) : CommandExecutor {
+) : CommandExecutor, TabCompleter {
+
+    override fun onTabComplete(
+        sender: CommandSender,
+        command: Command,
+        alias: String,
+        args: Array<out String>
+    ): List<String> {
+        if (args.size == 1) {
+            // only show items that actually have a market
+            return AssetFactory.getAssetNames()
+                .filter { it.startsWith(args[0], ignoreCase = true) }
+                .sorted()
+        }
+
+        if (args.size == 2) {
+            return listOf("1", "8", "16", "32", "64")
+                .filter { it.startsWith(args[1], ignoreCase = true) }
+        }
+
+        return emptyList()
+    }
 
     override fun onCommand(
         sender: CommandSender,
@@ -78,7 +100,8 @@ class BuyItemsCommand(
             return true
         }
 
-        val itemName = material.key.key
+        val itemName = material.key.key.replace("_", " ")
+            .lowercase().replaceFirstChar { it.uppercase() }
 
         val walletAddress = walletManager.getWallet(sender.uniqueId)
             ?: run {
@@ -88,13 +111,11 @@ class BuyItemsCommand(
 
         sender.sendMessage(Component.text("⏳ Processing purchase..."))
 
-        // ---- ASYNC BLOCKCHAIN WORK
         Bukkit.getScheduler().runTaskAsynchronously(plugin, Runnable {
             try {
-
                 if (!AssetFactory.checkAssetExists(itemName)) {
                     Bukkit.getScheduler().runTask(plugin, Runnable {
-                        sender.sendMessage(Component.text("This item is not available on the market yet."))
+                        sender.sendMessage(Component.text("❌ This item hasn't been sold yet — no market exists."))
                     })
                     return@Runnable
                 }
@@ -102,54 +123,43 @@ class BuyItemsCommand(
                 val DECIMALS = BigInteger.TEN.pow(18)
                 val amountOut = BigInteger.valueOf(amount.toLong()).multiply(DECIMALS)
 
-                val tokenAddress = AssetFactory.getAssetAddress(itemName)
-                    ?: error("Token address missing")
+                val assetAddress = AssetFactory.getAssetAddress(itemName)
+                    ?: error("Asset address not found")
 
-                val path = listOf(Blockcoin.address, tokenAddress)
-
-                // ---- QUOTE
+                // quote how much BlockCoin is needed
+                val path = listOf(Blockcoin.address, assetAddress)
                 val amountsIn = Uniswap.getAmountsIn(amountOut, path).get()
                 require(amountsIn.isNotEmpty()) { "No quote returned" }
 
                 val requiredIn = amountsIn.first()
                 val amountInMax = requiredIn
                     .multiply(BigInteger.valueOf(101))
-                    .divide(BigInteger.valueOf(100))
+                    .divide(BigInteger.valueOf(100)) // 1% slippage buffer
 
                 val spentBlockcoin = BigDecimal(requiredIn)
                     .divide(BigDecimal(DECIMALS))
 
-                // ---- SIGNER
-                val creds = Credentials.create(
-                    WalletManager.getWalletAuth(sender.uniqueId)
-                )
-                val txManager = RawTransactionManager(Blockcoin.web3, creds)
+                // player signs both transactions
+                val creds = Credentials.create(WalletManager.getWalletAuth(sender.uniqueId))
+                val playerTxManager = RawTransactionManager(Blockcoin.web3, creds)
 
-                // ---- APPROVE
+                // player approves factory to pull their BlockCoin
                 Blockcoin.approveSpending(
-                    Uniswap.v2routerAddress,
+                    AssetFactory.factoryAddress,
                     amountInMax,
-                    txManager
+                    playerTxManager
                 )
 
-                // ---- SWAP
-                val receipt = Uniswap.swapTokensForExactTokens(
+                // player calls buyAssetAndBurn on the factory
+                AssetFactory.buyAssetAndBurn(
+                    assetAddress,
                     amountOut,
-                    amountInMax,
-                    path,
-                    Address(walletAddress),
-                    org.web3j.abi.datatypes.generated.Uint256(
-                        BigInteger.valueOf(System.currentTimeMillis() / 1000 + 300)
-                    ),
-                    txManager
-                )
+                    playerTxManager
+                ) ?: error("Buy failed")
 
-                require(receipt.status == "0x1") { "Swap failed" }
-
-                // ---- SUCCESS → MAIN THREAD
+                // success — give items on main thread
                 Bukkit.getScheduler().runTask(plugin, Runnable {
                     if (!sender.isOnline) return@Runnable
-
                     sender.inventory.addItem(ItemStack(material, amount))
                     sender.sendMessage(
                         Component.text(
