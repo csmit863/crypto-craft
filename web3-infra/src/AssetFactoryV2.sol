@@ -33,6 +33,13 @@ contract AssetFactoryV2 is Ownable {
     uint256 public constant SEED_MIN   = 5    * 1e18;
     uint256 public constant SEED_RANGE = 16  * 1e18;
 
+        // player => assetAddress => LP tokens held by factory on their behalf
+    mapping(address => mapping(address => uint256)) public lpBalances;
+    // player => list of assets they've provided liquidity for
+    mapping(address => address[]) public liquidityPositions;
+
+    event LiquidityAdded(address indexed player, address indexed asset, uint256 assetAmount, uint256 blockCoinAmount, uint256 lpTokens);
+    event LiquidityRemoved(address indexed player, address indexed asset, uint256 blockCoinOut);
     event AssetBurned(address asset, address caller, uint256 amountOut, uint256 amount);
     event AssetSold(address asset, address recipient, uint256 amountIn, uint256 blockCoinOut);
 
@@ -167,6 +174,157 @@ contract AssetFactoryV2 is Ownable {
         MinecraftAsset(assetAddress).burnItems(address(this), amountOut);
 
         emit AssetBurned(assetAddress, msg.sender, amountOut, amounts[0]);
+    }
+
+
+
+    // player brings physical items (factory mints them) + BlockCoin from their wallet
+    function tokenizeAndDeposit(
+        address assetAddress,
+        uint256 assetAmount,      // items from Minecraft inventory
+        uint256 blockCoinAmount   // pulled from player wallet
+    ) external {
+        require(isAsset[assetAddress], "Not a valid asset");
+        require(assetAmount > 0 && blockCoinAmount > 0, "Amounts must be > 0");
+
+        // mint asset tokens directly to this contract
+        MinecraftAsset(assetAddress).tokenizeItems(address(this), assetAmount);
+
+        // pull BlockCoin from player
+        IERC20(address(BLOCKCOIN)).transferFrom(msg.sender, address(this), blockCoinAmount);
+
+        // approve router
+        IERC20(assetAddress).approve(address(ROUTER), assetAmount);
+        IERC20(address(BLOCKCOIN)).approve(address(ROUTER), blockCoinAmount);
+
+        (uint256 assetUsed, uint256 blockCoinUsed, uint256 lp) = ROUTER.addLiquidity(
+            assetAddress,
+            address(BLOCKCOIN),
+            assetAmount,
+            blockCoinAmount,
+            (assetAmount * 95) / 100,
+            (blockCoinAmount * 95) / 100,
+            address(this),   // factory holds LP tokens
+            block.timestamp + 300
+        );
+
+        // refund unused BlockCoin
+        if (blockCoinAmount > blockCoinUsed) {
+            IERC20(address(BLOCKCOIN)).transfer(msg.sender, blockCoinAmount - blockCoinUsed);
+        }
+
+        // track position
+        if (lpBalances[msg.sender][assetAddress] == 0) {
+            liquidityPositions[msg.sender].push(assetAddress);
+        }
+        lpBalances[msg.sender][assetAddress] += lp;
+
+        emit LiquidityAdded(msg.sender, assetAddress, assetUsed, blockCoinUsed, lp);
+    }
+
+    // remove liquidity for one asset, convert everything to BlockCoin
+    function withdrawLiquidity(address assetAddress) external {
+        uint256 lp = lpBalances[msg.sender][assetAddress];
+        require(lp > 0, "No position");
+
+        address pair = UNISWAP_FACTORY.getPair(assetAddress, address(BLOCKCOIN));
+        require(pair != address(0), "Pair not found");
+
+        // clear position before external calls
+        lpBalances[msg.sender][assetAddress] = 0;
+        _removeFromPositions(msg.sender, assetAddress);
+
+        // remove liquidity
+        IERC20(pair).approve(address(ROUTER), lp);
+        (uint256 assetOut, uint256 blockCoinOut) = ROUTER.removeLiquidity(
+            assetAddress,
+            address(BLOCKCOIN),
+            lp,
+            0,
+            0,
+            address(this),
+            block.timestamp + 300
+        );
+
+        // swap asset back to BlockCoin
+        IERC20(assetAddress).approve(address(ROUTER), assetOut);
+        address[] memory path = new address[](2);
+        path[0] = assetAddress;
+        path[1] = address(BLOCKCOIN);
+
+        uint256[] memory amounts = ROUTER.swapExactTokensForTokens(
+            assetOut,
+            0,
+            path,
+            msg.sender,      // BlockCoin from swap goes directly to player
+            block.timestamp + 300
+        );
+
+        // send BlockCoin from removeLiquidity to player
+        IERC20(address(BLOCKCOIN)).transfer(msg.sender, blockCoinOut);
+
+        emit LiquidityRemoved(msg.sender, assetAddress, blockCoinOut + amounts[1]);
+    }
+
+    // withdraw all positions at once
+    function withdrawAllLiquidity() external {
+        address[] memory assets = liquidityPositions[msg.sender];
+        require(assets.length > 0, "No positions");
+
+        for (uint256 i = 0; i < assets.length; i++) {
+            uint256 lp = lpBalances[msg.sender][assets[i]];
+            if (lp == 0) continue;
+
+            address pair = UNISWAP_FACTORY.getPair(assets[i], address(BLOCKCOIN));
+            if (pair == address(0)) continue;
+
+            lpBalances[msg.sender][assets[i]] = 0;
+
+            IERC20(pair).approve(address(ROUTER), lp);
+            (uint256 assetOut, uint256 blockCoinOut) = ROUTER.removeLiquidity(
+                assets[i],
+                address(BLOCKCOIN),
+                lp,
+                0, 0,
+                address(this),
+                block.timestamp + 300
+            );
+
+            IERC20(assets[i]).approve(address(ROUTER), assetOut);
+            address[] memory path = new address[](2);
+            path[0] = assets[i];
+            path[1] = address(BLOCKCOIN);
+
+            uint256[] memory amounts = ROUTER.swapExactTokensForTokens(
+                assetOut, 0, path, msg.sender, block.timestamp + 300
+            );
+
+            IERC20(address(BLOCKCOIN)).transfer(msg.sender, blockCoinOut);
+            emit LiquidityRemoved(msg.sender, assets[i], blockCoinOut + amounts[1]);
+        }
+
+        delete liquidityPositions[msg.sender];
+    }
+
+    // view: LP balance for a player/asset
+    function getLpBalance(address player, address assetAddress) external view returns (uint256) {
+        return lpBalances[player][assetAddress];
+    }
+
+    // view: all assets a player has liquidity in
+    function getLiquidityPositions(address player) external view returns (address[] memory) {
+        return liquidityPositions[player];
+    }
+
+    function _removeFromPositions(address player, address assetAddress) internal {
+        address[] storage positions = liquidityPositions[player];
+        for (uint256 i = 0; i < positions.length; i++) {
+            if (positions[i] == assetAddress) {
+                positions[i] = positions[positions.length - 1];
+                positions.pop();
+                break;
+            }
+        }
     }
 
     function getAllAssets() external view returns (address[] memory) {

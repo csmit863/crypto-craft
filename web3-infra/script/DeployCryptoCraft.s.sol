@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import { Script, console } from "forge-std/Script.sol";
 import { AssetFactoryV2 } from "../src/AssetFactoryV2.sol";
+import { Bank } from "../src/Bank.sol";
 import {UniswapV2FactoryDeployer} from "briefcase/deployers/v2-core/UniswapV2FactoryDeployer.sol";
 import {UniswapV2Router02Deployer} from "briefcase/deployers/v2-periphery/UniswapV2Router02Deployer.sol";
 import {WETH9} from "../src/WETH9.sol";
@@ -33,6 +34,10 @@ contract Setup is Script {
         // ----------
         // ** CryptoCraft V2 Deployment **
         AssetFactoryV2 assetFactoryV2 = new AssetFactoryV2(router);
+
+        // ----------
+        // ** CryptoCraft Bank Deployment **
+        //Bank bank = new Bank(address(assetFactoryV2.BLOCKCOIN()), address(assetFactoryV2), router);
         
         // log blockcoin address
         console.log(address(assetFactoryV2.BLOCKCOIN())); // [0]
@@ -42,6 +47,8 @@ contract Setup is Script {
         console.log(factory); // [2]
         // log uniswap router
         console.log(router); // [3]
+        // log bank
+        //console.log(address(bank));
         // ----------
 
         vm.stopBroadcast();

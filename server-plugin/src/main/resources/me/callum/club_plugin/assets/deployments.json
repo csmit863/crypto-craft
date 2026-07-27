@@ -1,1 +1,9 @@
-[{"logs":["0xE5b9c837CF35ad00937CE3B553A1F13807EAC8f4","0x6A59CC73e334b018C9922793d96Df84B538E6fD5"],"success":true}]
+[
+  {
+    "logs": [
+      "0x499fcd3a456b766f7c7B1190e73Ec5a20678d1bD",
+      "0x90b97E83e22AFa2e6A96b3549A0E495D5Bae61aF"
+    ],
+    "success": true
+  }
+]

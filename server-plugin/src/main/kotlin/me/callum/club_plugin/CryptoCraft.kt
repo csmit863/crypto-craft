@@ -1,8 +1,6 @@
 package me.callum.club_plugin
 
 import me.callum.club_plugin.commands.admin.*
-import me.callum.club_plugin.economy.Blockcoin
-import me.callum.club_plugin.economy.WalletManager
 import org.bukkit.plugin.java.JavaPlugin
 import com.google.gson.Gson
 import me.callum.club_plugin.commands.player.Bal
@@ -13,8 +11,7 @@ import me.callum.club_plugin.commands.player.CheckPriceCommand
 import me.callum.club_plugin.commands.player.Expand
 import me.callum.club_plugin.commands.player.LiquidityCommand
 import me.callum.club_plugin.config.ServerConfig
-import me.callum.club_plugin.economy.AssetFactory
-import me.callum.club_plugin.economy.Uniswap
+import me.callum.club_plugin.economy.*
 import org.web3j.crypto.Credentials
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.http.HttpService
@@ -43,6 +40,7 @@ class CryptoCraft : JavaPlugin() {
     private lateinit var walletManager: WalletManager
     private lateinit var assetFactory: AssetFactory
     private lateinit var uniswap: Uniswap
+    // private lateinit var bank: Bank
 
     private lateinit var worldBorderFile: File
     private lateinit var worldBorderState: WorldBorderState
@@ -105,12 +103,14 @@ class CryptoCraft : JavaPlugin() {
             ?: throw IllegalStateException("Missing Uniswap Factory address")
         val uniswapRouterAddress = uniswapDeployment.logs.getOrNull(1)
             ?: throw IllegalStateException("Missing Uniswap Router address")
+        // val bankAddress = uniswapDeployment.logs.getOrNull(2)
+        //     ?: throw IllegalStateException("Missing Bank address")
 
         assetFactory = AssetFactory.initialize(assetFactoryAddress, web3j, adminTxManager)
         blockcoin = Blockcoin.initialize(blockCoinAddress, web3j, adminTxManager)
         walletManager = WalletManager.initialize(blockcoin, web3j, adminTxManager)
         uniswap = Uniswap.initialize(uniswapFactoryAddress, uniswapRouterAddress, web3j, adminTxManager)
-
+        //bank = Bank.initialize(bankAddress, web3j)
         // sync assets from chain in background
 
         logger.info("Syncing assets from chain...")
@@ -165,7 +165,7 @@ class CryptoCraft : JavaPlugin() {
             setExecutor(cmd)
             tabCompleter = cmd
         }
-        getCommand("liquidity")?.setExecutor(LiquidityCommand())
+        getCommand("liquidity")?.setExecutor(LiquidityCommand(this@CryptoCraft, walletManager))
         getCommand("expand")?.setExecutor(Expand(this, walletManager))
 
 

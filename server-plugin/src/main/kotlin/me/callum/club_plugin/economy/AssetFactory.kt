@@ -241,7 +241,6 @@ object AssetFactory {
 
     fun createAsset(name: String, symbol: String): String? {
 
-        println("CREATE DA ASSET")
         val uploadName = normalizeName(name)
 
         println("creating asset $uploadName")
@@ -515,6 +514,126 @@ object AssetFactory {
             Material.values().firstOrNull { material ->
                 normalizeName(material.key.key) == normalizedName
             }?.key?.key  // return "sugar_cane" format
+        }
+    }
+
+    // player signs this — pulls BlockCoin from player, factory mints asset tokens
+    fun tokenizeAndDeposit(
+        assetAddress: String,
+        assetAmount: BigInteger,
+        blockCoinAmount: BigInteger,
+        playerTxManager: RawTransactionManager
+    ): String? {
+        val function = Function(
+            "tokenizeAndDeposit",
+            listOf(
+                Address(assetAddress),
+                Uint256(assetAmount),
+                Uint256(blockCoinAmount)
+            ),
+            emptyList()
+        )
+        return sendPlayerTx(function, playerTxManager, "tokenizeAndDeposit")
+    }
+
+    // player signs this — withdraws one asset position, converts to BlockCoin
+    fun withdrawLiquidity(
+        assetAddress: String,
+        playerTxManager: RawTransactionManager
+    ): String? {
+        val function = Function(
+            "withdrawLiquidity",
+            listOf(Address(assetAddress)),
+            emptyList()
+        )
+        return sendPlayerTx(function, playerTxManager, "withdrawLiquidity")
+    }
+
+    // player signs this — withdraws all positions, converts everything to BlockCoin
+    fun withdrawAllLiquidity(
+        playerTxManager: RawTransactionManager
+    ): String? {
+        val function = Function(
+            "withdrawAllLiquidity",
+            emptyList(),
+            emptyList()
+        )
+        return sendPlayerTx(function, playerTxManager, "withdrawAllLiquidity")
+    }
+
+    // view: LP balance for a player/asset
+    fun getLpBalance(playerAddress: String, assetAddress: String): BigInteger? {
+        val function = Function(
+            "getLpBalance",
+            listOf(Address(playerAddress), Address(assetAddress)),
+            listOf(object : TypeReference<Uint256>() {})
+        )
+        return try {
+            val response = web3.ethCall(
+                Transaction.createEthCallTransaction(
+                    playerAddress, factoryAddress, FunctionEncoder.encode(function)
+                ),
+                org.web3j.protocol.core.DefaultBlockParameterName.LATEST
+            ).send()
+            val decoded = FunctionReturnDecoder.decode(response.value, function.outputParameters)
+            (decoded[0] as Uint256).value
+        } catch (e: Exception) {
+            println("❌ getLpBalance failed: ${e.message}")
+            null
+        }
+    }
+
+    // view: all assets a player has liquidity in
+    fun getLiquidityPositions(playerAddress: String): List<String>? {
+        val function = Function(
+            "getLiquidityPositions",
+            listOf(Address(playerAddress)),
+            listOf(object : TypeReference<org.web3j.abi.datatypes.DynamicArray<Address>>() {})
+        )
+        return try {
+            val response = web3.ethCall(
+                Transaction.createEthCallTransaction(
+                    playerAddress, factoryAddress, FunctionEncoder.encode(function)
+                ),
+                org.web3j.protocol.core.DefaultBlockParameterName.LATEST
+            ).send()
+            val decoded = FunctionReturnDecoder.decode(response.value, function.outputParameters)
+            @Suppress("UNCHECKED_CAST")
+            (decoded[0].value as List<Address>).map { it.value }
+        } catch (e: Exception) {
+            println("❌ getLiquidityPositions failed: ${e.message}")
+            null
+        }
+    }
+
+    // shared helper for player-signed transactions to the factory
+    private fun sendPlayerTx(
+        function: Function,
+        playerTxManager: RawTransactionManager,
+        label: String
+    ): String? {
+        val encodedFunction = FunctionEncoder.encode(function)
+        return try {
+            val estimateTx = Transaction.createFunctionCallTransaction(
+                playerTxManager.fromAddress,
+                null, null, null,
+                factoryAddress,
+                encodedFunction
+            )
+            val (gasPrice, gasLimit) = GasUtils.estimateGas(web3, estimateTx)
+            val tx = playerTxManager.sendTransaction(
+                gasPrice, gasLimit, factoryAddress, encodedFunction, BigInteger.ZERO
+            )
+            val txHash = requireNotNull(tx.transactionHash) { "TX hash null" }
+            println("✅ $label sent: $txHash")
+            val receipt = waitForReceipt(txHash)
+            require(receipt != null && receipt.isStatusOK) { "$label reverted" }
+            println("✅ $label successful")
+            txHash
+        } catch (e: Exception) {
+            println("❌ $label failed:")
+            e.printStackTrace()
+            null
         }
     }
 
