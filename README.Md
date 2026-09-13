@@ -4,7 +4,7 @@
 Buy, sell, exchange items and much more in Minecraft using blockchain technology!
 
 
-![crypto_craft](pics/crypto_craft.png)
+![crypto_craft](pics/cryptocraft_liquidity_bar_chart.png)
 
 This monorepo manages three key parts of cryptocraft:
 1. ![web3-infra](web3-infra/README.md): a foundry project managing the smart contracts required to mint and burn tokenized items, including deploying Uniswap V2
