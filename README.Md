@@ -92,8 +92,8 @@ To check the liquidity of a item/blockcoin pair, the /liquidity (item) command c
 Admins can retrieve the smart contract configuration using the /getconfig command. This returns the smart contract addresses in use. The smart contract addresses can also be changed by the operator with /set(config) command.
 ![config](pics/serverconfigcommand.png)
 
-Because the data is on-chain, you can easily use an indexer to get the price history of a particular item if you have its pair address. Here is the price of dirt in blockcoin over a series of blocks:
-![dirtprice](pics/dirt_price.png)
+Because the data is on-chain, you can easily use an indexer to get the price history of a particular item if you have its pair address. Here is the price of dirt in blockcoin over a series of blocks (including the reserve pool balances of each token):
+![dirtprice](pics/cryptocraft_liquidity_barchart3.png)
 
 
 
